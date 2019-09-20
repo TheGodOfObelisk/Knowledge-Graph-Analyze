@@ -29,5 +29,5 @@ Breakins via the sadmind vulnerability, both successful and unsuccessful on thos
 Installation of the trojan mstream DDoS software on three hosts at the AFB  
 (5) 借助被控制的主机对远程服务器发动DDOS攻击（DDOSAttack）;  
 Launching the DDoS  
-[^1]:archive.ll.mit.edu/ideval/data/2000/LLS_DDOS_1.0.html
+[^1]:archive.ll.mit.edu/ideval/data/2000/LLS_DDOS_1.0.html  
 [^2]:胡倩.基于多步攻击场景的攻击预测方法[J].计算机科学,2019,46(S1):365-369.
