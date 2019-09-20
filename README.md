@@ -18,7 +18,7 @@ conn.log中存放网络中连接的日志，其实连接建立也是一种事件
 我们目前将知识存储在MYSQL数据库中，这种传统的关系型数据的存储与知识图谱所需的语义存储相去甚远。考虑使用D2RQ将关系型数据转换为RDF表示的数据。  
 
 ## 数据集选取
-考虑DARPA的[LLS_DDOS](archive.ll.mit.edu/ideval/data/2000/LLS_DDOS_1.0.html)，这是一个DDOS攻击的数据集，它将攻击分为五个阶段[^2]:  
+考虑DARPA的[LLS_DDOS](https://archive.ll.mit.edu/ideval/data/2000/LLS_DDOS_1.0.html)，这是一个DDOS攻击的数据集，它将攻击分为五个阶段[2]:  
 (1) 预探测网络（IPSweep）;  
 IPsweep of the AFB from a remote site  
 (2) 端口扫描，确定主机的脆弱信息（PortScan）;
