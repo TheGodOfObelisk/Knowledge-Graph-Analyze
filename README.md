@@ -21,10 +21,13 @@ conn.log中存放网络中连接的日志，其实连接建立也是一种事件
 考虑DARPA的[LLS_DDOS](https://archive.ll.mit.edu/ideval/data/2000/LLS_DDOS_1.0.html)，这是一个DDOS攻击的数据集，它将攻击分为五个阶段[1]:  
 (1) 预探测网络（IPSweep）;  
 IPsweep of the AFB from a remote site  
+The adversary performs a scripted IPsweep of multiple class C subnets on the Air Force Base. The following networks are swept from address 1 to 254: 172.16.115.0/24, 172.16.114.0/24, 172.16.113.0/24, 172.16.112.0/24. The attacker sends ICMP echo-requests in this sweep and listens for ICMP echo-replies to determine which hosts are "up".  
 (2) 端口扫描，确定主机的脆弱信息（PortScan）;  
 Probe of live IP's to look for the sadmind daemon running on Solaris hosts  
+The hosts discovered in the previous phase are probed to determine which hosts are running the "sadmind" remote administration tool. This tells the attacker which hosts might be vulnerable to the exploit that he/she has. Each host is probed, by the script, using the "ping" option of the sadmind exploit program, as provided on the Internet by "Cheez Whiz". The ping option makes a rpc request to the host in question, asks what TCP port number to connect to for the sadmind service, and then connects to the port number supplied to test to see if the daemon is listening.  
 (3) 获得管理员权限（FTPBufOverflow）;  
 Breakins via the sadmind vulnerability, both successful and unsuccessful on those hosts  
+The attacker then tries to break into the hosts found to be running the sadmind service in the previous phase. The attack script attempts the sadmind Remote-to-Root exploit several times against each host, each time with different parameters. Since this is a remote buffer-overflow attack, the exploit code cannot easily determine the appropriate stack pointer value as in a local buffer-overflow. Thus the adversary must try several different stack pointer values, each of which he/she has validated to work on some test machines. There are three stack pointer values attempted on each potential victim. With each attempt, the exploit tries to execute one command, as root, on the remote system. The attacker needs to execute two commands however, one to "cat" an entry onto the victim's /etc/passwd file and one to "cat" an entry onto the victim's /etc/shadow file. The new root user's name is 'hacker2' and hacker2's home directory is set to be /tmp. Thus, there are 6 exploit attempts on each potential victim host. To test weather or not a break-in was successful, the attack script attempts a login, via telnet, as hacker2, after each set of two breakin attempts. When successful the attackers script moves on to the next potential victim.  
 (4) 安装特洛伊Mstream DDOS木马软件（UploadSoftware）;  
 Installation of the trojan mstream DDoS software on three hosts at the AFB  
 (5) 借助被控制的主机对远程服务器发动DDOS攻击（DDOSAttack）;  
