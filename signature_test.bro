@@ -1,5 +1,13 @@
 global n = 0;
 global m = 0;
+global p_num = 0;
+
+# 基本数据包
+event raw_packet(p: raw_pkt_hdr){
+    print "raw_packet!";
+    print p;
+    p_num += 1;
+}
 
 # phase-1-dump
 event icmp_echo_request(C: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
@@ -95,4 +103,5 @@ event bro_done(){
     print "Over.";
     print n;
     print m;
+    print p_num;
 }
