@@ -9,6 +9,13 @@ event raw_packet(p: raw_pkt_hdr){
     p_num += 1;
 }
 
+event packet_contents(c: connection, contents: string){
+    print "packet_contents!";
+    print c;
+    print contents;
+    p_num -= 1;
+}
+
 # phase-1-dump
 event icmp_echo_request(C: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_request!";
