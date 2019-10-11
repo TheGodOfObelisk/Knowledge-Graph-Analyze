@@ -3,17 +3,48 @@ global m = 0;
 global p_num = 0;
 
 # 基本数据包
+# A raw packet header, consisting of L2 header and everything in pkt_hdr. .
 event raw_packet(p: raw_pkt_hdr){
     print "raw_packet!";
     print p;
+    if(p?$l2){
+        print p$l2;
+    } else {
+        print "no l2";
+    }
+    if(p?$ip){
+        print p$ip;
+    } else {
+        print "no ip field";
+    }
+    if(p?$ip6){
+        print p$ip6;
+    } else {
+        print "no ip6 field";
+    }
+    if(p?$tcp){
+        print p$tcp;
+    } else {
+        print "no tcp field";
+    }
+    if(p?$udp){
+        print p$udp;
+    } else {
+        print "no udp field";
+    }
+    if(p?$icmp){
+        print p$icmp;
+    } else {
+        print "no icmp field";
+    }
     p_num += 1;
 }
 
 event packet_contents(c: connection, contents: string){
     print "packet_contents!";
-    print c;
-    print contents;
-    p_num -= 1;
+    # print c;
+    # print contents;
+    # p_num -= 1;
 }
 
 # phase-1-dump
