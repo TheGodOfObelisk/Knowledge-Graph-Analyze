@@ -1,6 +1,7 @@
 global n = 0;
 global m = 0;
 global p_num = 0;
+global k = 0;
 
 # 基本数据包
 # A raw packet header, consisting of L2 header and everything in pkt_hdr. .
@@ -58,6 +59,36 @@ event icmp_echo_reply(C: connection, icmp: icmp_conn, id: count, seq: count, pay
     print "icmp_echo_reply!";
     print icmp;
     m += 1;
+}
+
+event icmp_time_exceeded(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_time_exceeded!";
+    k += 1;
+}
+
+event icmp_error_message(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_error_message!";
+}
+
+event icmp_neighbor_advertisement(C: connection, icmp: icmp_conn, router: bool, solicited: bool,
+override: bool, tgt: addr, options: icmp6_nd_options){
+    print "icmp_neighbor_advertisement!";
+}
+
+event icmp_neighbor_solicitation(C: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
+    print "icmp_neighbor_solicitation!";
+}
+
+event icmp_packet_too_big(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_packet_too_big!";
+}
+
+event icmp_parameter_problem(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_parameter_problem!";
+}
+
+event icmp_redirect(C: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
+    print "icmp_redirect!";
 }
 
 # phase-2-dump
@@ -141,5 +172,6 @@ event bro_done(){
     print "Over.";
     print n;
     print m;
+    print k;
     print p_num;
 }
