@@ -6,93 +6,166 @@ global k = 0;
 # 基本数据包
 # A raw packet header, consisting of L2 header and everything in pkt_hdr. .
 event raw_packet(p: raw_pkt_hdr){
-    print "raw_packet!";
-    print p;
-    if(p?$l2){
-        print p$l2;
-    } else {
-        print "no l2";
-    }
-    if(p?$ip){
-        print p$ip;
-    } else {
-        print "no ip field";
-    }
-    if(p?$ip6){
-        print p$ip6;
-    } else {
-        print "no ip6 field";
-    }
-    if(p?$tcp){
-        print p$tcp;
-    } else {
-        print "no tcp field";
-    }
-    if(p?$udp){
-        print p$udp;
-    } else {
-        print "no udp field";
-    }
-    if(p?$icmp){
-        print p$icmp;
-    } else {
-        print "no icmp field";
-    }
+    # print "raw_packet!";
+    # print p;
+    # if(p?$l2){
+    #     print p$l2;
+    # } else {
+    #     print "no l2";
+    # }
+    # if(p?$ip){
+    #     print p$ip;
+    # } else {
+    #     print "no ip field";
+    # }
+    # if(p?$ip6){
+    #     print p$ip6;
+    # } else {
+    #     print "no ip6 field";
+    # }
+    # if(p?$tcp){
+    #     print p$tcp;
+    # } else {
+    #     print "no tcp field";
+    # }
+    # if(p?$udp){
+    #     print p$udp;
+    # } else {
+    #     print "no udp field";
+    # }
+    # if(p?$icmp){
+    #     print p$icmp;
+    # } else {
+    #     print "no icmp field";
+    # }
     p_num += 1;
 }
 
 event packet_contents(c: connection, contents: string){
     print "packet_contents!";
-    # print c;
+    print c;
     # print contents;
     # p_num -= 1;
 }
 
 # phase-1-dump
-event icmp_echo_request(C: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
-    print "icmp_echo_request!";
-    print icmp;
+event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
+    # print "icmp_echo_request!";
+    # print icmp;
     n += 1;
 }
 
-event icmp_echo_reply(C: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
+event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_reply!";
-    print icmp;
+    # print icmp;
     m += 1;
 }
 
-event icmp_time_exceeded(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+event icmp_time_exceeded(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
     print "icmp_time_exceeded!";
     k += 1;
 }
 
-event icmp_error_message(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+event icmp_error_message(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
     print "icmp_error_message!";
 }
 
-event icmp_neighbor_advertisement(C: connection, icmp: icmp_conn, router: bool, solicited: bool,
+event icmp_neighbor_advertisement(c: connection, icmp: icmp_conn, router: bool, solicited: bool,
 override: bool, tgt: addr, options: icmp6_nd_options){
     print "icmp_neighbor_advertisement!";
 }
 
-event icmp_neighbor_solicitation(C: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
+event icmp_neighbor_solicitation(c: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
     print "icmp_neighbor_solicitation!";
 }
 
-event icmp_packet_too_big(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+event icmp_packet_too_big(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
     print "icmp_packet_too_big!";
 }
 
-event icmp_parameter_problem(C: connection, icmp: icmp_conn, code: count, context: icmp_context){
+event icmp_parameter_problem(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
     print "icmp_parameter_problem!";
 }
 
-event icmp_redirect(C: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
+event icmp_redirect(c: connection, icmp: icmp_conn, tgt: addr, dest: addr, options: icmp6_nd_options){
     print "icmp_redirect!";
 }
 
+event icmp_router_advertisement(c: connection, icmp: icmp_conn, cur_hop_limit: count, managed: bool,
+other: bool, home_agent: bool, pref: count, proxy: bool, res: count, router_lifetime: interval,
+reachable_time: interval, retrans_timer: interval, options: icmp6_nd_options){
+    print "icmp_router_advertisement!";
+}
+
+event icmp_router_solicitation(c: connection, icmp: icmp_conn, options: icmp6_nd_options){
+    print "icmp_router_solicitation!";
+}
+
+event icmp_sent(c: connection, icmp: icmp_conn){
+    print "icmp_sent!";
+}
+
+event icmp_sent_payload(c: connection, icmp: icmp_conn, payload: string){
+    print "icmp_sent_payload!";
+}
+
+event icmp_unreachable(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_unreachable!";
+}
 # phase-2-dump
 # pm related
+event mount_proc_mnt(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t, rep: MOUNT3::mnt_reply_t){
+    print "mount_proc_mnt!";
+}
+
+event mount_proc_not_implemented(c: connection, info: MOUNT3::info_t, proc: MOUNT3::proc_t){
+    print "mount_proc_not_implemented!";
+}
+
+event mount_proc_null(c: connection, info: MOUNT3::info_t){
+    print "mount_proc_null!";
+}
+
+event mount_proc_umnt(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t){
+    print "mount_proc_umnt!";
+}
+
+event mount_proc_umnt_all(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t){
+    print "mount_proc_umnt_all!";
+}
+
+event mount_reply_status(n: connection, info: MOUNT3::info_t){
+    print "mount_reply_status!";
+}
+
+event nfs_proc_create(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::newobj_reply_t){
+    print "nfs_proc_create!";
+}
+
+event nfs_proc_getaddr(c: connection, info: NFS3::info_t, fh: string, attrs: NFS3::fattr_t){
+    print "nfs_proc_getaddr!";
+}
+
+event nfs_proc_link(c: connection, info: NFS3::info_t, req: NFS3::linkargs_t, rep: NFS3::link_reply_t){
+    print "nfs_proc_link!";
+}
+
+event nfs_proc_lookup(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::lookup_reply_t){
+    print "nfs_proc_lookup!";
+}
+
+event nfs_proc_mkdir(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::newobj_reply_t){
+    print "nfs_proc_mkdir!";
+}
+
+event nfs_proc_not_implemented(c: connection, info: NFS3::info_t, proc: NFS3::proc_t){
+    print "nfs_proc_not_implemented!";
+}
+
+event nfs_proc_null(c: connection, info: NFS3::info_t){
+    print "nfs_proc_null!";
+}
+
 event pm_attempt_getport(r: connection, status: rpc_status, pr: pm_port_request){
     print "pm_attempt_getport!";
 }
