@@ -43,7 +43,7 @@ event raw_packet(p: raw_pkt_hdr){
 
 event packet_contents(c: connection, contents: string){
     print "packet_contents!";
-    print c;
+    # print c;
     # print contents;
     # p_num -= 1;
 }
@@ -165,6 +165,48 @@ event nfs_proc_not_implemented(c: connection, info: NFS3::info_t, proc: NFS3::pr
 event nfs_proc_null(c: connection, info: NFS3::info_t){
     print "nfs_proc_null!";
 }
+
+event nfs_proc_read(c: connection, info: NFS3::info_t, req: NFS3::readargs_t, rep: NFS3::read_reply_t){
+    print "nfs_proc_read!";
+}
+
+event nfs_proc_readdir(c: connection, info: NFS3::info_t, req: NFS3::readdirargs_t, rep: NFS3::readdir_reply_t){
+    print "nfs_proc_readdir!";
+}
+
+event nfs_proc_readlink(c: connection, info: NFS3::info_t, fh: string, rep: NFS3::readlink_reply_t){
+    print "nfs_proc_readlink!";
+}
+
+event nfs_proc_remove(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::delobj_reply_t){
+    print "nfs_proc_remove!";
+}
+
+event nfs_proc_rename(c: connection, info: NFS3::info_t, req: NFS3::renameopargs_t, rep: NFS3::renameobj_reply_t){
+    print "nfs_proc_rename!";
+}
+
+event nfs_proc_rmdir(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::delobj_reply_t){
+    print "nfs_proc_rmdir!";
+}
+
+event nfs_proc_sattr(c: connection, info: NFS3::info_t, req: NFS3::sattrargs_t, rep: NFS3::sattr_reply_t){
+    print "nfs_proc_sattr!";
+}
+
+event nfs_proc_symlink(c: connection, info: NFS3::info_t, req: NFS3::symlinkargs_t, rep: NFS3::newobj_reply_t){
+    print "nfs_proc_symlink!";
+}
+
+event nfs_proc_write(c: connection, info: NFS3::info_t, req: NFS3::writeargs_t, rep: NFS3::write_reply_t){
+    print "nfs_proc_write!";
+}
+
+event nfs_reply_status(n: connection, info: NFS3::info_t){
+    print "nfs_reply_status!";
+}
+
+#--上面是关于nfs的调用事件--
 
 event pm_attempt_getport(r: connection, status: rpc_status, pr: pm_port_request){
     print "pm_attempt_getport!";
