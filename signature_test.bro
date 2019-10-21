@@ -6,8 +6,8 @@ global k = 0;
 # 基本数据包
 # A raw packet header, consisting of L2 header and everything in pkt_hdr. .
 event raw_packet(p: raw_pkt_hdr){
-    # print "raw_packet!";
-    # print p;
+    print "raw_packet!";
+    print p;
     # if(p?$l2){
     #     print p$l2;
     # } else {
@@ -43,7 +43,7 @@ event raw_packet(p: raw_pkt_hdr){
 
 event packet_contents(c: connection, contents: string){
     print "packet_contents!";
-    # print c;
+    print c;
     # print contents;
     # p_num -= 1;
 }
@@ -271,6 +271,9 @@ event rpc_dialogue(c: connection, prog: count, ver: count, proc: count, status: 
 event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count){
     print "rpc_reply!";
 }
+# 上面是关于pm和rpc的,可惜一个都没有触发
+# 考虑包内容中有resp_p=111/udp,其中111是portmapper的端口号得知此包与portmapper相关
+# 如何通过bro得知rpc调用了sadmind守护进程?
 
 # phase-3-dump
 
