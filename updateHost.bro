@@ -1,3 +1,4 @@
+# author: wangyixuan
 # It aims at getting hosts'
 # USERNAME,    0      pay attention to NTLM PLZ
 # HOSTNAME,      1
@@ -10,28 +11,22 @@
 # Applications  (Why do we need it? Should we guess during which period such applications are running?)
 # Protocols     (so many protocols, how to handle them? It exists between two hosts.)
 
-# 2019.1.13
 # Maintain the information of hosts all the time and output it to log file regularly
 
-# 2019.1.14
 # completed two functions named update_hostlist and update_single_host
 
-# 2019.1.15
 # event new_connection: collect various protocols which are indicated by connections
 # event protocol_confirmation: this event is emitted when bro confirms that this protocol is actually running here
 # problem to solve: whether the protocols comes is a new protocol? Using !in is not appropriate.
 
-# 2019.1.16
 # adjust the format of protocols   etc: http:33,dns:14
 # data to log cannot be a table
 
-# 2019.1.17
 # how to invoke a event in a specific interval
 # refer to test1.bro and define an event by ourself
 # this user-defined event can complish the task of logging hostlist every n seconds
 # outside dataprocesser can read the log every n seconds as well
 
-# 2019.1.18 todo-list
 # convert ts to the form of "YYYY:MM:DD-HH:MM:SS", which is easier to understand
 # in "ips": mark the timestamp of each ip
 # in "protocols": mark the number that indicate how many time this protocol has beem confirmed
@@ -41,13 +36,15 @@
 # 2. redundant ip in "ips" field
 # 3, three records missing ips(uninitialized)
 # 4. the way to check a ip already exist? etc: 192.168.1.5, 192.168.1.50 substring is not reliable
+
 module HOST_INFO;
 
 export{
 	# Create an ID for our new stream. By convention, this is
 	# called "HOST_INFO_LOG".
 	redef enum Log::ID += { HOST_INFO_LOG,
-                            SUMMARY_HOST_LOG };
+                            SUMMARY_HOST_LOG,
+                            NET_EVENTS_LOG };# NET_EVENTS_LOG记录重要网络事件(或者网络包),作为KG分析的输入,BRO脚本分析多步攻击的数据集
 
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -63,6 +60,13 @@ export{
         os: string      &default="" &log;
         description: string     &default="" &log;
         protocols: string   &default="" &log; # list all of its protocols
+    };
+
+    # 再定义一个结构体,用于存储三元组事件
+    type kg_info: record{
+        A: string &log;
+        relation: string &log;
+        B: string &log;
     };
 }
 
@@ -723,6 +727,8 @@ event bro_init() &priority=10{
 	Log::create_stream(HOST_INFO::HOST_INFO_LOG, [$columns=host_info, $path="host-info"]);
     # the other log stream to output of a summary of host-info
     Log::create_stream(HOST_INFO::SUMMARY_HOST_LOG, [$columns=host_info, $path="host-summary"]);
+    # 同样地,建立KG要存储的内容的日志流
+    Log::create_stream(HOST_INFO::NET_EVENTS_LOG, [$columns=kg_info, $path="network_events"]);# kg_info存储"三元组"形式的知识
     # some useless fields are filtered
     local filter: Log::Filter = [$name="without_dscription", $path="simple_hosts",
                                 $include=set("ip","hostname","username","mac","os","ips","protocols")];
@@ -742,4 +748,6 @@ event bro_done(){
         local rec: HOST_INFO::host_info = hostlist[i];
         Log::write(HOST_INFO::SUMMARY_HOST_LOG, rec);
     }
+    local rec1: HOST_INFO::kg_info = [$A=" ", $relation=" ", $B=" "];# 三元组日志测试数据
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
 }

@@ -1,3 +1,6 @@
+@load /usr/local/bro/share/bro/base/bif/plugins/Bro_RPC.events.bif.bro
+
+
 global n = 0;
 global m = 0;
 global p_num = 0;
@@ -6,8 +9,8 @@ global k = 0;
 # 基本数据包
 # A raw packet header, consisting of L2 header and everything in pkt_hdr. .
 event raw_packet(p: raw_pkt_hdr){
-    print "raw_packet!";
-    print p;
+    # print "raw_packet!";
+    # print p;
     # if(p?$l2){
     #     print p$l2;
     # } else {
@@ -43,7 +46,12 @@ event raw_packet(p: raw_pkt_hdr){
 
 event packet_contents(c: connection, contents: string){
     print "packet_contents!";
-    print c;
+    # print c$id$resp_p;
+    if(c$id$resp_p == 111/udp){
+        print "portmapper protocol";
+    } else {
+        print c$id$resp_p;
+    }
     # print contents;
     # p_num -= 1;
 }
@@ -274,6 +282,12 @@ event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count)
 # 上面是关于pm和rpc的,可惜一个都没有触发
 # 考虑包内容中有resp_p=111/udp,其中111是portmapper的端口号得知此包与portmapper相关
 # 如何通过bro得知rpc调用了sadmind守护进程?
+
+event udp_contents(u: connection, is_orig: bool, contents: string){
+    print "udp_contents!";
+    print u;
+}
+# 测试一下udp事件
 
 # phase-3-dump
 
