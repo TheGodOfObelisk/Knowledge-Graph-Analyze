@@ -36,7 +36,7 @@
 # 2. redundant ip in "ips" field
 # 3, three records missing ips(uninitialized)
 # 4. the way to check a ip already exist? etc: 192.168.1.5, 192.168.1.50 substring is not reliable
-
+# @load /home/lw/myKGA/signature_test.bro
 module HOST_INFO;
 
 export{
@@ -46,6 +46,10 @@ export{
                             SUMMARY_HOST_LOG,
                             NET_EVENTS_LOG };# NET_EVENTS_LOG记录重要网络事件(或者网络包),作为KG分析的输入,BRO脚本分析多步攻击的数据集
 
+    # 定义三元组中谓语的类型
+    type relation: enum {
+        Empty, ICMPPing
+    };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
     # redef LogAscii::use_json = T;
@@ -62,11 +66,17 @@ export{
         protocols: string   &default="" &log; # list all of its protocols
     };
 
-    # 再定义一个结构体,用于存储三元组事件
+    # 再定义一个结构体,用于存储三元组事件(A, relation, B),实际就是(主,谓,宾)三元组
+    # 三元组事件的存储方案: 1.三元组表 2.水平表 3.属性表 4.垂直划分 5.六重索引 6.DB2RDF 
+    # 还是存储到RDF中,后续可以进行SPARQL查询?
+    # 数据量巨大,考虑三元组的聚合(去除一些没用的三元组)=>类比南理工的文章中的经验聚合(去除一些不太重要的告警信息)
+    # 三元组的内容不局限于最底层流量,应当有一些告警层面的三元组
     type kg_info: record{
-        A: string &log;
-        relation: string &log;
-        B: string &log;
+        ts: time    &log;
+        A: string   &log;
+        # relation: string    &log;# 关系用string类型表示恐怕不合适
+        predicate: relation     &log;
+        B: string   &log;
     };
 }
 
@@ -735,6 +745,68 @@ event bro_init() &priority=10{
     Log::add_filter(HOST_INFO::SUMMARY_HOST_LOG, filter);
 }
 
+# phase-1-dump
+event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
+    print "icmp_echo_request!";
+    # print icmp;
+}
+
+event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
+    print "icmp_echo_reply!";
+    # print icmp;
+}
+
+event icmp_time_exceeded(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_time_exceeded!";
+}
+
+event icmp_error_message(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_error_message!";
+}
+
+event icmp_neighbor_advertisement(c: connection, icmp: icmp_conn, router: bool, solicited: bool,
+override: bool, tgt: addr, options: icmp6_nd_options){
+    print "icmp_neighbor_advertisement!";
+}
+
+event icmp_neighbor_solicitation(c: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
+    print "icmp_neighbor_solicitation!";
+}
+
+event icmp_packet_too_big(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_packet_too_big!";
+}
+
+event icmp_parameter_problem(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_parameter_problem!";
+}
+
+event icmp_redirect(c: connection, icmp: icmp_conn, tgt: addr, dest: addr, options: icmp6_nd_options){
+    print "icmp_redirect!";
+}
+
+event icmp_router_advertisement(c: connection, icmp: icmp_conn, cur_hop_limit: count, managed: bool,
+other: bool, home_agent: bool, pref: count, proxy: bool, res: count, router_lifetime: interval,
+reachable_time: interval, retrans_timer: interval, options: icmp6_nd_options){
+    print "icmp_router_advertisement!";
+}
+
+event icmp_router_solicitation(c: connection, icmp: icmp_conn, options: icmp6_nd_options){
+    print "icmp_router_solicitation!";
+}
+
+event icmp_sent(c: connection, icmp: icmp_conn){
+    print "icmp_sent!";
+}
+
+event icmp_sent_payload(c: connection, icmp: icmp_conn, payload: string){
+    print "icmp_sent_payload!";
+}
+
+event icmp_unreachable(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
+    print "icmp_unreachable!";
+}
+
 event bro_init(){
     print "start";
     # local a: addr = 123.123.123.123;
@@ -748,6 +820,6 @@ event bro_done(){
         local rec: HOST_INFO::host_info = hostlist[i];
         Log::write(HOST_INFO::SUMMARY_HOST_LOG, rec);
     }
-    local rec1: HOST_INFO::kg_info = [$A=" ", $relation=" ", $B=" "];# 三元组日志测试数据
+    local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMPPing, $B=" "];# 三元组日志测试数据
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
 }

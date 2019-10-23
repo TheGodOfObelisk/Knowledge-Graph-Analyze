@@ -1,5 +1,6 @@
 @load /usr/local/bro/share/bro/base/bif/plugins/Bro_RPC.events.bif.bro
-
+@load /home/lw/myKGA/updateHost.bro
+# 如何处理文件重复包含?
 
 global n = 0;
 global m = 0;
