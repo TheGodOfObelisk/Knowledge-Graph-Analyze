@@ -46,9 +46,9 @@ export{
                             SUMMARY_HOST_LOG,
                             NET_EVENTS_LOG };# NET_EVENTS_LOG记录重要网络事件(或者网络包),作为KG分析的输入,BRO脚本分析多步攻击的数据集
 
-    # 定义三元组中谓语的类型
+    # 定义三元组中谓语的类型,输出的格式是HOST_INFO::ICMP_ECHO_REQUEST
     type relation: enum {
-        Empty, ICMPPing
+        Empty, ICMP_ECHO_REQUEST
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -70,7 +70,7 @@ export{
     # 三元组事件的存储方案: 1.三元组表 2.水平表 3.属性表 4.垂直划分 5.六重索引 6.DB2RDF 
     # 还是存储到RDF中,后续可以进行SPARQL查询?
     # 数据量巨大,考虑三元组的聚合(去除一些没用的三元组)=>类比南理工的文章中的经验聚合(去除一些不太重要的告警信息)
-    # 三元组的内容不局限于最底层流量,应当有一些告警层面的三元组
+    # 三元组的内容不局限于最底层流量,应当有一些告警层面的三元组(但是这种三元组从哪儿来?有现成的事件还是推理出来)
     type kg_info: record{
         ts: time    &log;
         A: string   &log;
@@ -820,6 +820,6 @@ event bro_done(){
         local rec: HOST_INFO::host_info = hostlist[i];
         Log::write(HOST_INFO::SUMMARY_HOST_LOG, rec);
     }
-    local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMPPing, $B=" "];# 三元组日志测试数据
+    local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMP_ECHO_REQUEST, $B=" "];# 三元组日志测试数据
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
 }
