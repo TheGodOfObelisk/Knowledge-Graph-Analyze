@@ -48,7 +48,7 @@ export{
 
     # 定义三元组中谓语的类型,输出的格式是HOST_INFO::ICMP_ECHO_REQUEST
     type relation: enum {
-        Empty, ICMP_ECHO_REQUEST
+        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -71,12 +71,18 @@ export{
     # 还是存储到RDF中,后续可以进行SPARQL查询?
     # 数据量巨大,考虑三元组的聚合(去除一些没用的三元组)=>类比南理工的文章中的经验聚合(去除一些不太重要的告警信息)
     # 三元组的内容不局限于最底层流量,应当有一些告警层面的三元组(但是这种三元组从哪儿来?有现成的事件还是推理出来)
-    type kg_info: record{
+
+    # 更新: 用边来表示事件,为了兼容各种情况,可以包含诸多属性
+    # 属性可以慢慢添加,逐渐完善
+    # 目前考虑的事件: 1. icmp ping事件
+    type event_info: record{
         ts: time    &log;
-        A: string   &log;
-        # relation: string    &log;# 关系用string类型表示恐怕不合适
-        predicate: relation     &log;
-        B: string   &log;
+        real_time: string   &log;
+        event_type: relation    &log;
+        src_ip: addr    &log;
+        src_p: port     &log;
+        dst_ip: addr    &log;
+        dst_p: port     &log;
     };
 }
 
@@ -766,7 +772,7 @@ event bro_init() &priority=10{
     # the other log stream to output of a summary of host-info
     Log::create_stream(HOST_INFO::SUMMARY_HOST_LOG, [$columns=host_info, $path="host-summary"]);
     # 同样地,建立KG要存储的内容的日志流
-    Log::create_stream(HOST_INFO::NET_EVENTS_LOG, [$columns=kg_info, $path="network_events"]);# kg_info存储"三元组"形式的知识
+    Log::create_stream(HOST_INFO::NET_EVENTS_LOG, [$columns=event_info, $path="network_events"]);# kg_info存储"三元组"形式的知识
     # some useless fields are filtered
     local filter: Log::Filter = [$name="without_dscription", $path="simple_hosts",
                                 $include=set("ip","hostname","username","mac","os","ips","protocols")];
@@ -779,6 +785,7 @@ event bro_init() &priority=10{
 # phase-1-dump
 event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_request!";
+    # print c;
     # 记录资产,主机即资产
     if(c$id ?$ orig_h && c$id ?$ resp_h){
         local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_request"];
@@ -788,6 +795,12 @@ event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, p
         update_hostlist(rec2, "icmp_echo_request");
         Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
     }
+    # 记录事件,事件以边的形式呈现,必须连接两个点
+    local t: time = current_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d %H:%M:%S", t)), 
+                                        $event_type = ICMP_ECHO_REQUEST, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
+                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
     # print icmp;
 }
 
@@ -802,6 +815,12 @@ event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, pay
         update_hostlist(rec2, "icmp_echo_reply");
         Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
     }
+    # 记录事件,事件以边的形式呈现,必须连接两个点
+    local t: time = current_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d %H:%M:%S", t)), 
+                                        $event_type = ICMP_ECHO_REPLY, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
+                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
     # print icmp;
 }
 
@@ -869,6 +888,6 @@ event bro_done(){
         local rec: HOST_INFO::host_info = hostlist[i];
         Log::write(HOST_INFO::SUMMARY_HOST_LOG, rec);
     }
-    local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMP_ECHO_REQUEST, $B=" "];# 三元组日志测试数据
-    Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
+    # local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMP_ECHO_REQUEST, $B=" "];# 三元组日志测试数据
+    # Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
 }
