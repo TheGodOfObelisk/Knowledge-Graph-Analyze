@@ -247,7 +247,7 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
 function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
     # print "prepare to update";
     local has_updated: bool = F;
-    if(hinfo$mac != "" || hinfo$hostname != ""){
+    if(hinfo$mac != "" || hinfo$hostname != ""){ 
         # I believe that mac addresses and hostnames can uniquely identify a host.
         for(i in hostlist){
             if(((hostlist[i]$mac == hinfo$mac) && (hinfo$mac != "")) || ((hostlist[i]$hostname == hinfo$hostname) && (hinfo$hostname != ""))){
@@ -262,8 +262,36 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
             hostlist[|hostlist|] = hinfo;
             local wall_time: time = network_time();
             local tmp_ip: string = fmt("%s", hinfo$ip);
-            hostlist[|hostlist|]$ips += fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", wall_time) + tmp_ip);
+            # 这边应该也要-1
+            hostlist[|hostlist|-1]$ips += fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", wall_time) + tmp_ip);
             has_updated = T;
+        }
+    }
+    # 为了icmp发现的主机能进入记录,暂时允许把ip作为主机唯一性考量
+    if(hinfo ?$ ip){
+        for(i in hostlist){
+            if(hostlist[i]$ip == hinfo$ip){# 如果有,更新一下,其实没有什么好更新的
+            print hostlist[i]$ip;
+            print hinfo$ip;
+                update_single_host(hinfo, protocol, i);
+                has_updated = T;
+                break;
+            }
+        }
+        # 如果没有,插入
+        if(!has_updated){
+            print "a new ip comes";
+            print hinfo$ip;
+            print |hostlist|;
+            hostlist[|hostlist|] = hinfo;
+            print |hostlist|;
+            local wall_time1: time = network_time();
+            local tmp_ip1: string = fmt("%s", hinfo$ip);
+            # print hostlist[|hostlist|-1];
+            # |hostlist|改变了,再对齐对应记录作修改,后面-1
+            hostlist[|hostlist|-1]$ips += fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", wall_time1) + tmp_ip1);
+            has_updated = T;
+            # 针对仅有ip的主机更新情况,不会再去下一个if分支
         }
     }
     if(!has_updated){
@@ -745,14 +773,35 @@ event bro_init() &priority=10{
     Log::add_filter(HOST_INFO::SUMMARY_HOST_LOG, filter);
 }
 
+# 数据集分析的事件,同样要关心里面涉及的主机信息
+# 网络流量图谱的基于bro日志构建,转为Gremlin脚本(属性设定,加点加边)输出
+# 网络流量图谱的分析计算依赖于Gremlin提供的强大的图计算能力
 # phase-1-dump
 event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_request!";
+    # 记录资产,主机即资产
+    if(c$id ?$ orig_h && c$id ?$ resp_h){
+        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_request"];
+        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_echo_request"];
+        update_hostlist(rec1, "icmp_echo_request");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
+        update_hostlist(rec2, "icmp_echo_request");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
+    }
     # print icmp;
 }
 
 event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_reply!";
+    # 记录资产,主机即资产
+    if(c$id ?$ orig_h && c$id ?$ resp_h){
+        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_reply"];
+        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_echo_reply"];
+        update_hostlist(rec1, "icmp_echo_reply");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
+        update_hostlist(rec2, "icmp_echo_reply");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
+    }
     # print icmp;
 }
 

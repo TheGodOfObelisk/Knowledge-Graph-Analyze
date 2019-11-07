@@ -1,3 +1,4 @@
+// example
 graph.schema().propertyKey("ip").asText().ifNotExist().create()
 graph.schema().propertyKey("frequency").asInt().ifNotExist().create()
 graph.schema().propertyKey("vertex_type").asText().ifNotExist().create()
