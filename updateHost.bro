@@ -102,8 +102,8 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
     print fmt("the ip is %s", tmp_ip);
     if(hostlist[index]$ips == ""){
         # print fmt("initialize ips of index %d", index);
-        local t: time = current_time();
-        hostlist[index]$ips = fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", t) + tmp_ip);
+        local t: time = network_time();
+        hostlist[index]$ips = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", t) + tmp_ip);
     }
     if(hostlist[index]$protocols == ""){
         # print fmt("initialize protocols of index %d", index);
@@ -118,8 +118,8 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
         # maybe we need a new way to determine whether the ip is new: edit the if condition
         if(tmp_ip !in hostlist[index]$ips){
             # a new ip comes, append it to the end of ips
-            local t1: time = current_time();
-            hostlist[index]$ips += fmt(",%s", strftime("%Y-%m-%d %H:%M:%S|", t1) + tmp_ip);
+            local t1: time = network_time();
+            hostlist[index]$ips += fmt(",%s", strftime("%Y-%m-%d-%H:%M:%S|", t1) + tmp_ip);
             print "append ips";
         } else {
             print "update ips";
@@ -149,14 +149,14 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
                     # here is strange segment fault when I try to directly overwrite tmp_tlb[key] here
                     # so I record the value of key instead
                     up_index = key;
-                    # tmp_tlb[key] = fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", t2) + tmp_ip);
+                    # tmp_tlb[key] = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", t2) + tmp_ip);
                     # print fmt("the last item: %s", tmp_tlb[key]);
                     # if(key == ori_len){ # the last item
-                    #     tmp_tlb[key] = fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", t2) + tmp_ip);
+                    #     tmp_tlb[key] = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", t2) + tmp_ip);
                     #     print fmt("the last item: %s", tmp_tlb[key]);
                     # }
                     # else{ # previous items
-                    #     tmp_tlb[key] = fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", t2) + tmp_ip);
+                    #     tmp_tlb[key] = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", t2) + tmp_ip);
                     #     print fmt("previous item: %s", tmp_tlb[key]);
                     # }
                 }
@@ -166,8 +166,8 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
             if(up_index != 0){
                 # up_index is applied to update tmp_tlb
                 # from now on, tmp_tlb_ip is useless
-                local t2: time = current_time();
-                tmp_tlb[up_index] = fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", t2) + tmp_ip);
+                local t2: time = network_time();
+                tmp_tlb[up_index] = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", t2) + tmp_ip);
             }
             for(key in tmp_tlb){
                 print fmt("[%d]=>%s", key, tmp_tlb[key]);
@@ -269,7 +269,7 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
             local wall_time: time = network_time();
             local tmp_ip: string = fmt("%s", hinfo$ip);
             # 这边应该也要-1
-            hostlist[|hostlist|-1]$ips += fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", wall_time) + tmp_ip);
+            hostlist[|hostlist|-1]$ips += fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", wall_time) + tmp_ip);
             has_updated = T;
         }
     }
@@ -295,7 +295,7 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
             local tmp_ip1: string = fmt("%s", hinfo$ip);
             # print hostlist[|hostlist|-1];
             # |hostlist|改变了,再对齐对应记录作修改,后面-1
-            hostlist[|hostlist|-1]$ips += fmt("%s", strftime("%Y-%m-%d %H:%M:%S|", wall_time1) + tmp_ip1);
+            hostlist[|hostlist|-1]$ips += fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", wall_time1) + tmp_ip1);
             has_updated = T;
             # 针对仅有ip的主机更新情况,不会再去下一个if分支
         }
@@ -790,14 +790,14 @@ event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, p
     if(c$id ?$ orig_h && c$id ?$ resp_h){
         local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_request"];
         local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_echo_request"];
-        update_hostlist(rec1, "icmp_echo_request");
+        update_hostlist(rec1, "icmp");
         Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
-        update_hostlist(rec2, "icmp_echo_request");
+        update_hostlist(rec2, "icmp");
         Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
     }
     # 记录事件,事件以边的形式呈现,必须连接两个点
-    local t: time = current_time();
-    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d %H:%M:%S", t)), 
+    local t: time = network_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
                                         $event_type = ICMP_ECHO_REQUEST, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
                                         $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
@@ -810,14 +810,14 @@ event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, pay
     if(c$id ?$ orig_h && c$id ?$ resp_h){
         local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_reply"];
         local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_echo_reply"];
-        update_hostlist(rec1, "icmp_echo_reply");
+        update_hostlist(rec1, "icmp");
         Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
-        update_hostlist(rec2, "icmp_echo_reply");
+        update_hostlist(rec2, "icmp");
         Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
     }
     # 记录事件,事件以边的形式呈现,必须连接两个点
-    local t: time = current_time();
-    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d %H:%M:%S", t)), 
+    local t: time = network_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
                                         $event_type = ICMP_ECHO_REPLY, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
                                         $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
