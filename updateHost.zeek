@@ -37,7 +37,93 @@
 # 3, three records missing ips(uninitialized)
 # 4. the way to check a ip already exist? etc: 192.168.1.5, 192.168.1.50 substring is not reliable
 # @load /home/lw/myKGA/signature_test.bro
+@load /usr/local/zeek/share/zeek/policy/frameworks/dpd/detect-protocols.zeek
+@load /usr/local/zeek/share/zeek/policy/frameworks/dpd/packet-segment-logging.zeek
+
 module HOST_INFO;
+
+const pm_ports = { 111/udp, 111/tcp };
+redef likely_server_ports += {pm_ports};
+
+redef ProtocolDetector::valids += {[Analyzer::ANALYZER_PORTMAPPER, 0.0.0.0, 111/udp] = ProtocolDetector::BOTH};
+
+# declarations of my own events
+global portmapper_call: function(c: connection);
+
+const analyzer_tags: set[Analyzer::Tag] = {
+    Analyzer::ANALYZER_AYIYA,
+    Analyzer::ANALYZER_BITTORRENT,
+    Analyzer::ANALYZER_BITTORRENTTRACKER,
+    Analyzer::ANALYZER_CONNSIZE,
+    Analyzer::ANALYZER_DCE_RPC,
+    Analyzer::ANALYZER_DHCP,
+    Analyzer::ANALYZER_DNP3_TCP,
+    Analyzer::ANALYZER_DNP3_UDP,
+    Analyzer::ANALYZER_CONTENTS_DNS,
+    Analyzer::ANALYZER_DNS,
+    Analyzer::ANALYZER_FTP_DATA,
+    Analyzer::ANALYZER_IRC_DATA,
+    Analyzer::ANALYZER_FINGER,
+    Analyzer::ANALYZER_FTP,
+    Analyzer::ANALYZER_FTP_ADAT,
+    Analyzer::ANALYZER_GNUTELLA,
+    Analyzer::ANALYZER_GSSAPI,
+    Analyzer::ANALYZER_GTPV1,
+    Analyzer::ANALYZER_HTTP,
+    Analyzer::ANALYZER_ICMP,
+    Analyzer::ANALYZER_IDENT,
+    Analyzer::ANALYZER_IMAP,
+    Analyzer::ANALYZER_IRC,
+    Analyzer::ANALYZER_KRB,
+    Analyzer::ANALYZER_KRB_TCP,
+    Analyzer::ANALYZER_CONTENTS_RLOGIN,
+    Analyzer::ANALYZER_CONTENTS_RSH,
+    Analyzer::ANALYZER_LOGIN,
+    Analyzer::ANALYZER_NVT,
+    Analyzer::ANALYZER_RLOGIN,
+    Analyzer::ANALYZER_RSH,
+    Analyzer::ANALYZER_TELNET,
+    Analyzer::ANALYZER_MODBUS,
+    Analyzer::ANALYZER_MQTT,
+    Analyzer::ANALYZER_MYSQL,
+    Analyzer::ANALYZER_CONTENTS_NCP,
+    Analyzer::ANALYZER_NCP,
+    Analyzer::ANALYZER_CONTENTS_NETBIOSSSN,
+    Analyzer::ANALYZER_NETBIOSSSN,
+    Analyzer::ANALYZER_NTLM,
+    Analyzer::ANALYZER_NTP,
+    Analyzer::ANALYZER_PIA_TCP,
+    Analyzer::ANALYZER_PIA_UDP,
+    Analyzer::ANALYZER_POP3,
+    Analyzer::ANALYZER_RADIUS,
+    Analyzer::ANALYZER_RDP,
+    Analyzer::ANALYZER_RFB,
+    Analyzer::ANALYZER_CONTENTS_NFS,
+    Analyzer::ANALYZER_CONTENTS_RPC,
+    Analyzer::ANALYZER_MOUNT,
+    Analyzer::ANALYZER_NFS,
+    Analyzer::ANALYZER_PORTMAPPER,
+    Analyzer::ANALYZER_SIP,
+    Analyzer::ANALYZER_CONTENTS_SMB,
+    Analyzer::ANALYZER_SMB,
+    Analyzer::ANALYZER_SMTP,
+    Analyzer::ANALYZER_SNMP,
+    Analyzer::ANALYZER_SOCKS,
+    Analyzer::ANALYZER_SSH,
+    Analyzer::ANALYZER_DTLS,
+    Analyzer::ANALYZER_SSL,
+    Analyzer::ANALYZER_STEPPINGSTONE,
+    Analyzer::ANALYZER_SYSLOG,
+    Analyzer::ANALYZER_CONTENTLINE,
+    Analyzer::ANALYZER_CONTENTS,
+    Analyzer::ANALYZER_TCP,
+    Analyzer::ANALYZER_TCPSTATS,
+    Analyzer::ANALYZER_TEREDO,
+    Analyzer::ANALYZER_UDP,
+    Analyzer::ANALYZER_VXLAN,
+    Analyzer::ANALYZER_XMPP,
+    Analyzer::ANALYZER_ZIP
+};
 
 export{
 	# Create an ID for our new stream. By convention, this is
@@ -48,7 +134,7 @@ export{
 
     # 定义三元组中谓语的类型,输出的格式是HOST_INFO::ICMP_ECHO_REQUEST
     type relation: enum {
-        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE
+        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE, RPC_REPLY, PORTMAP
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -83,6 +169,7 @@ export{
         src_p: port     &log;
         dst_ip: addr    &log;
         dst_p: port     &log;
+        description: string &default="" &log;
     };
 }
 
@@ -97,10 +184,10 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
     # remember to initialize "ips" and "protocols"
     # print fmt("update index %d", index);
     # print hinfo;
-    print fmt("index is : %d", index);
+    # print fmt("index is : %d", index);
     local tmp_ip: string = fmt("%s", hinfo$ip);
     local up_index: count = 0;
-    print fmt("the ip is %s", tmp_ip);
+    # print fmt("the ip is %s", tmp_ip);
     if(hostlist[index]$ips == ""){
         # print fmt("initialize ips of index %d", index);
         local t: time = network_time();
@@ -126,20 +213,20 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
             print "update ips";
             # in this case, the previous ts should be updated
             local comma: pattern = /,/;
-            local tmp_tlb: string_vec = split_string_all(hostlist[index]$ips, comma);
+            local tmp_tlb: string_vec = split_string(hostlist[index]$ips, comma);
             local ori_len: count = |tmp_tlb|;
             # tmp_tlb_ip holds the ips in tmp_tlb and has the same index as tmp_tlb
             # To ensure the coming ip is a new ip or not clearly.
             local tmp_tlb_ip: string_vec;
             for(key in tmp_tlb){
-                local bin_tlb: string_vec = split_string_all(tmp_tlb[key], /\|/);
+                local bin_tlb: string_vec = split_string(tmp_tlb[key], /\|/);
                 tmp_tlb_ip[key] = bin_tlb[2];
             }
-            print fmt("previous len: %d", ori_len);
-            print "what is in ips now ?";
-            print hostlist[index]$ips;
-            print "what is in  tmp_tlb now?";
-            print tmp_tlb;
+            # print fmt("previous len: %d", ori_len);
+            # print "what is in ips now ?";
+            # print hostlist[index]$ips;
+            # print "what is in  tmp_tlb now?";
+            # print tmp_tlb;
             for(key in tmp_tlb_ip){# use tmp_tlb_ip to determine the key to store
                 print key;    # To avoid missing ips, we should initialize "ips" when we append a new item
                 print tmp_tlb_ip[key];
@@ -170,21 +257,22 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
                 local t2: time = network_time();
                 tmp_tlb[up_index] = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S|", t2) + tmp_ip);
             }
-            for(key in tmp_tlb){
-                print fmt("[%d]=>%s", key, tmp_tlb[key]);
-            }
+            # for(key in tmp_tlb){
+            #     print fmt("[%d]=>%s", key, tmp_tlb[key]);
+            # }
             # hostlist[index]$ips = cat_string_array(tmp_tlb); # overwrite
             hostlist[index]$ips = join_string_vec(tmp_tlb, ",");
-            print fmt("after join:%s", hostlist[index]$ips);
+            # print fmt("after join:%s", hostlist[index]$ips);
             # recheck the number of commas in ips
-            if(ori_len != |split_string_all(hostlist[index]$ips, comma)|){
+            if(ori_len != |split_string(hostlist[index]$ips, comma)|){
                 print "Unexpected error: the number of commas is wrong";
-                print fmt("ori_len: %d, new len: %d", ori_len, |split_string_all(hostlist[index]$ips, comma)|);
+                print fmt("ori_len: %d, new len: %d", ori_len, |split_string(hostlist[index]$ips, comma)|);
             }
         }
-    } else {
-        print "do not update ips";
-    }
+    } 
+    # else {
+    #     print "do not update ips";
+    # }
     # check that whether protocol is a protocol related to this host
     # if not: concatenate "protocols"   separated by commas
     # this check condition is not so good
@@ -195,12 +283,14 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
         hostlist[index]$protocols += fmt(",%s:1", protocol);
     } else {
         # record the count
-        local pro_tlb: string_vec = split_string_all(hostlist[index]$protocols, /,/);
+        # print hostlist[index]$protocols;
+        local pro_tlb: string_vec = split_string(hostlist[index]$protocols, /,/);
         local pro_tlb_tmp: string_vec;
-        print "start updating protocols";
-        print pro_tlb;
+        # print "start updating protocols";
+        # print pro_tlb;
         for(key in pro_tlb){
-            local bin_p_tlb: string_vec = split_string_all(pro_tlb[key], /:/);
+            local bin_p_tlb: string_vec = split_string(pro_tlb[key], /:/);
+            # print bin_p_tlb;
             pro_tlb_tmp[key] = bin_p_tlb[1];
         }
         for(key in pro_tlb_tmp){
@@ -209,15 +299,15 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
                 up_index = key;
             }
             if(up_index != 0){
-                local bin_p_tlb1: string_vec = split_string_all(pro_tlb[up_index], /:/);
+                local bin_p_tlb1: string_vec = split_string(pro_tlb[up_index], /:/);
                 local num_s: string = bin_p_tlb1[2];
                 local num_v: count = to_count(num_s);
                 num_v += 1;
                 pro_tlb[up_index] = fmt("%s:%d", bin_p_tlb1[1], num_v);
             }
-            for(key in pro_tlb){
-                print fmt("[%d]=>%s", key, pro_tlb[key]);
-            }
+            # for(key in pro_tlb){
+            #     print fmt("[%d]=>%s", key, pro_tlb[key]);
+            # }
             hostlist[index]$protocols = join_string_vec(pro_tlb, ",");
         }
     }
@@ -767,25 +857,12 @@ event software_unparsed_version_found(c: connection, host: addr, str: string){
 #     # fill app record
 # }
 
-event zeek_init() &priority=10{
-    # create our log stream at the very beginning
-	Log::create_stream(HOST_INFO::HOST_INFO_LOG, [$columns=host_info, $path="host-info"]);
-    # the other log stream to output of a summary of host-info
-    Log::create_stream(HOST_INFO::SUMMARY_HOST_LOG, [$columns=host_info, $path="host-summary"]);
-    # 同样地,建立KG要存储的内容的日志流
-    Log::create_stream(HOST_INFO::NET_EVENTS_LOG, [$columns=event_info, $path="network_events"]);# kg_info存储"三元组"形式的知识
-    # some useless fields are filtered
-    local filter: Log::Filter = [$name="without_dscription", $path="simple_hosts",
-                                $include=set("ip","hostname","username","mac","os","ips","protocols")];
-    Log::add_filter(HOST_INFO::SUMMARY_HOST_LOG, filter);
-}
-
 # 基本数据包
 # A raw packet header, consisting of L2 header and everything in pkt_hdr. .
 # 比起packet_contents,raw_packet提供的信息更少,而且bro提出这两个事件的开销很大
 event raw_packet(p: raw_pkt_hdr){
-    print "raw_packet!";
-    print p;
+    # print "raw_packet!";
+    # print p;
     # print p;
     # if(p?$l2){
     #     print p$l2;
@@ -820,18 +897,21 @@ event raw_packet(p: raw_pkt_hdr){
 }
 
 event packet_contents(c: connection, contents: string){
-    print "packet_contents!";
+    # print "packet_contents!";
     # print c$id$resp_p;
     if(c$id$resp_p == 111/udp){
         # 这种情况视作一个rpc事件,对应phase2中的135个分组(总共148个)
-        print "portmapper protocol";
-        print c;
-        print contents;
-        num_packets += 1;
+        # 其实是对目标主机的111/udp端口进行端口扫描,bro没有提供这个事件,自己定制该事件
+        # print "portmapper protocol";
+        # print c;
+        # print contents;
+        portmapper_call(c);
+        # num_packets += 1;
     } else {
-        print c$id$resp_p;
+        print c;
+        num_packets += 1;
     }
-    # print contents;
+    # # print contents;
     # p_num -= 1;
 }
 
@@ -839,6 +919,8 @@ event packet_contents(c: connection, contents: string){
 # 数据集分析的事件,同样要关心里面涉及的主机信息
 # 网络流量图谱的基于bro日志构建,转为Gremlin脚本(属性设定,加点加边)输出
 # 网络流量图谱的分析计算依赖于Gremlin提供的强大的图计算能力
+
+# XX 放弃Gremlin脚本,调用hugegraph的http API传送json数据完成图更新操作
 # phase-1-dump
 event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_request!";
@@ -950,7 +1032,29 @@ event icmp_unreachable(c: connection, icmp: icmp_conn, code: count, context: icm
 
 # phase-2-dump
 # pm related
-# 阶段2需要自己定义事件了,自带的事件没有触发
+
+# ProtocolDetector::found_protocol
+
+# 阶段2需要自己定义"事件"了,自带的事件没有触发
+function portmapper_call(c: connection){
+    print "portmapper_call!";
+    # 记录资产,主机即资产
+    if(c$id ?$ orig_h && c$id ?$ resp_h){
+        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "portmap"];
+        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "portmap"];
+        update_hostlist(rec1, "portmap");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
+        update_hostlist(rec2, "portmap");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
+    }
+    # 记录事件,事件以边的形式呈现,必须连接两个点
+    local t: time = network_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
+                                        $event_type = PORTMAP, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
+                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = "SADMIND(100232)"];# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
+}
+
 # 从new_packet,packet_contents出发
 event mount_proc_mnt(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t, rep: MOUNT3::mnt_reply_t){
     print "mount_proc_mnt!";
@@ -1106,13 +1210,56 @@ event rpc_dialogue(c: connection, prog: count, ver: count, proc: count, status: 
     print "rpc_dialogue!";
 }
 
+# 这边的实现,可能有误,明明是rpc_call
 event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count){
+    # print c;
+    # print status;
+    # 记录资产,主机即资产
+    if(c$id ?$ orig_h && c$id ?$ resp_h){
+        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "rpc_reply"];
+        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "rpc_reply"];
+        update_hostlist(rec1, "rpc");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
+        update_hostlist(rec2, "rpc");
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
+    }
+    # 记录事件,事件以边的形式呈现,必须连接两个点
+    local t: time = network_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
+                                        $event_type = RPC_REPLY, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
+                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = fmt("%s", status)];
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
     print "rpc_reply!";
+    # num_packets += 1;
 }
 # 上面是关于pm和rpc的,可惜一个都没有触发
 # 考虑包内容中有resp_p=111/udp,其中111是portmapper的端口号得知此包与portmapper相关
 # 如何通过bro得知rpc调用了sadmind守护进程?
 
+function start_analyzers(){
+    # enable RPC-based protocol analyzers
+    Analyzer::register_for_ports(Analyzer::ANALYZER_PORTMAPPER, pm_ports);
+    Analyzer::enable_analyzer(Analyzer::ANALYZER_PORTMAPPER);
+    for(e in analyzer_tags){
+        Analyzer::enable_analyzer(e);
+    }
+}
+
+event zeek_init() &priority=10{
+    start_analyzers();
+    # Analyzer::register_for_ports(Analyzer::ANALYZER_CONTENTS_RPC, pm_ports);
+    # Analyzer::enable_analyzer(Analyzer::ANALYZER_CONTENTS_RPC);
+    # create our log stream at the very beginning
+	Log::create_stream(HOST_INFO::HOST_INFO_LOG, [$columns=host_info, $path="host-info"]);
+    # the other log stream to output of a summary of host-info
+    Log::create_stream(HOST_INFO::SUMMARY_HOST_LOG, [$columns=host_info, $path="host-summary"]);
+    # 同样地,建立KG要存储的内容的日志流
+    Log::create_stream(HOST_INFO::NET_EVENTS_LOG, [$columns=event_info, $path="network_events"]);# kg_info存储"三元组"形式的知识
+    # some useless fields are filtered
+    local filter: Log::Filter = [$name="without_dscription", $path="simple_hosts",
+                                $include=set("ip","hostname","username","mac","os","ips","protocols")];
+    Log::add_filter(HOST_INFO::SUMMARY_HOST_LOG, filter);
+}
 
 event zeek_done(){
     print "finish";
@@ -1122,5 +1269,10 @@ event zeek_done(){
     }
     # local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMP_ECHO_REQUEST, $B=" "];# 三元组日志测试数据
     # Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
+    # print Analyzer::registered_ports(Analyzer::ANALYZER_CONTENTS_RPC);
+    # print Analyzer::all_registered_ports();
+    # print Analyzer::disabled_analyzers;
+    # print likely_server_ports;
     print num_packets;
 }
+
