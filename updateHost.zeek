@@ -126,13 +126,13 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
             print "update ips";
             # in this case, the previous ts should be updated
             local comma: pattern = /,/;
-            local tmp_tlb: table[count] of string = split(hostlist[index]$ips, comma);
+            local tmp_tlb: string_vec = split_string_all(hostlist[index]$ips, comma);
             local ori_len: count = |tmp_tlb|;
             # tmp_tlb_ip holds the ips in tmp_tlb and has the same index as tmp_tlb
             # To ensure the coming ip is a new ip or not clearly.
-            local tmp_tlb_ip: table[count] of string;
+            local tmp_tlb_ip: string_vec;
             for(key in tmp_tlb){
-                local bin_tlb: table[count] of string = split(tmp_tlb[key], /\|/);
+                local bin_tlb: string_vec = split_string_all(tmp_tlb[key], /\|/);
                 tmp_tlb_ip[key] = bin_tlb[2];
             }
             print fmt("previous len: %d", ori_len);
@@ -174,12 +174,12 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
                 print fmt("[%d]=>%s", key, tmp_tlb[key]);
             }
             # hostlist[index]$ips = cat_string_array(tmp_tlb); # overwrite
-            hostlist[index]$ips = join_string_array(",", tmp_tlb);
+            hostlist[index]$ips = join_string_vec(tmp_tlb, ",");
             print fmt("after join:%s", hostlist[index]$ips);
             # recheck the number of commas in ips
-            if(ori_len != |split(hostlist[index]$ips, comma)|){
+            if(ori_len != |split_string_all(hostlist[index]$ips, comma)|){
                 print "Unexpected error: the number of commas is wrong";
-                print fmt("ori_len: %d, new len: %d", ori_len, |split(hostlist[index]$ips, comma)|);
+                print fmt("ori_len: %d, new len: %d", ori_len, |split_string_all(hostlist[index]$ips, comma)|);
             }
         }
     } else {
@@ -195,12 +195,12 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
         hostlist[index]$protocols += fmt(",%s:1", protocol);
     } else {
         # record the count
-        local pro_tlb: table[count] of string = split(hostlist[index]$protocols, /,/);
-        local pro_tlb_tmp: table[count] of string;
+        local pro_tlb: string_vec = split_string_all(hostlist[index]$protocols, /,/);
+        local pro_tlb_tmp: string_vec;
         print "start updating protocols";
         print pro_tlb;
         for(key in pro_tlb){
-            local bin_p_tlb: table[count] of string = split(pro_tlb[key], /:/);
+            local bin_p_tlb: string_vec = split_string_all(pro_tlb[key], /:/);
             pro_tlb_tmp[key] = bin_p_tlb[1];
         }
         for(key in pro_tlb_tmp){
@@ -209,7 +209,7 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
                 up_index = key;
             }
             if(up_index != 0){
-                local bin_p_tlb1: table[count] of string = split(pro_tlb[up_index], /:/);
+                local bin_p_tlb1: string_vec = split_string_all(pro_tlb[up_index], /:/);
                 local num_s: string = bin_p_tlb1[2];
                 local num_v: count = to_count(num_s);
                 num_v += 1;
@@ -218,7 +218,7 @@ function update_single_host(hinfo: HOST_INFO::host_info, protocol: string, index
             for(key in pro_tlb){
                 print fmt("[%d]=>%s", key, pro_tlb[key]);
             }
-            hostlist[index]$protocols = join_string_array(",", pro_tlb);
+            hostlist[index]$protocols = join_string_vec(pro_tlb, ",");
         }
     }
     # update timestamp
@@ -325,19 +325,19 @@ function check_ssh_hostname(id: conn_id, uid: string, host: addr){
     }
 }
 
-event OS_version_found(c: connection, host: addr, OS: OS_version){
-    # print "an operating system has been fingerprinted";
-    # print fmt("the host running this OS is %s", host);
-    # print OS;
-    if(OS$genre != "UNKNOWN"){
-        local os_detail = fmt("%s %s", OS$genre, OS$detail);
-        local rec: HOST_INFO::host_info = [$ts = network_time(), $ip = host, $os = os_detail, $description = "OS_version_found"];
-        update_hostlist(rec, "os_fingerprint");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec);
-    }
-    # e.g [genre=UNKNOWN, detail=, dist=36, match_type=direct_inference]
-    # How to utilize this message?
-}
+# event OS_version_found(c: connection, host: addr, OS: OS_version){
+#     # print "an operating system has been fingerprinted";
+#     # print fmt("the host running this OS is %s", host);
+#     # print OS;
+#     if(OS$genre != "UNKNOWN"){
+#         local os_detail = fmt("%s %s", OS$genre, OS$detail);
+#         local rec: HOST_INFO::host_info = [$ts = network_time(), $ip = host, $os = os_detail, $description = "OS_version_found"];
+#         update_hostlist(rec, "os_fingerprint");
+#         Log::write(HOST_INFO::HOST_INFO_LOG, rec);
+#     }
+#     # e.g [genre=UNKNOWN, detail=, dist=36, match_type=direct_inference]
+#     # How to utilize this message?
+# }
 
 # There is no point in removing dulipcated messages for a specific ip. 
 # Becuase ip addresses should not be the unique identification of a specific host.
@@ -527,9 +527,9 @@ event protocol_confirmation(c: connection, atype: Analyzer::Tag, aid: count){
         case Analyzer::ANALYZER_AYIYA:
             protocol = "ayiya";
             break;
-        case Analyzer::ANALYZER_BACKDOOR:
-            protocol = "backdoor";
-            break;
+        # case Analyzer::ANALYZER_BACKDOOR:
+        #     protocol = "backdoor";
+        #     break;
         case Analyzer::ANALYZER_BITTORRENT:
             protocol = "bittorrent";
             break;
@@ -593,9 +593,9 @@ event protocol_confirmation(c: connection, atype: Analyzer::Tag, aid: count){
         case Analyzer::ANALYZER_IMAP:
             protocol = "imap";
             break;
-        case  Analyzer::ANALYZER_INTERCONN:
-            protocol = "interconn";
-            break;
+        # case  Analyzer::ANALYZER_INTERCONN:
+        #     protocol = "interconn";
+        #     break;
         case Analyzer::ANALYZER_IRC:
             protocol = "irc";
             break;
@@ -763,11 +763,11 @@ event software_unparsed_version_found(c: connection, host: addr, str: string){
     # fill app record
 }
 
-event software_version_found(c: connection, host: addr, s: software, descr: string){
-    # fill app record
-}
+# event software_version_found(c: connection, host: addr, s: software, descr: string){
+#     # fill app record
+# }
 
-event bro_init() &priority=10{
+event zeek_init() &priority=10{
     # create our log stream at the very beginning
 	Log::create_stream(HOST_INFO::HOST_INFO_LOG, [$columns=host_info, $path="host-info"]);
     # the other log stream to output of a summary of host-info
@@ -1114,7 +1114,7 @@ event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count)
 # 如何通过bro得知rpc调用了sadmind守护进程?
 
 
-event bro_done(){
+event zeek_done(){
     print "finish";
     for(i in hostlist){
         local rec: HOST_INFO::host_info = hostlist[i];
