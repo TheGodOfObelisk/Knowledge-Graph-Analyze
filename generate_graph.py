@@ -31,7 +31,11 @@ events = []
 propertyKeys_txt = ["ip", "ts", "vertex_type", "edge_type", "time", "ips", "status", "src_ip", "src_p", "dst_ip", "dst_p", "description"]
 propertyKeys_int = ["frequency"]
 vertexTypes = ["entity"]
-edgeTypes = ["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap"]
+edgeTypes = 
+["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap", 
+ "new_connection_contents", "connection-SYN-packet", "tcp_packet", "connection_established",
+ "connection_first_ack", "connection_eof", "connection_finished", "connection_pending", "login_output_line",
+ "login_input_line", "login_confused", "login_confused_text", "login_success"]
 
 if __name__ == '__main__':
     # cmd = "cat host-summary.log | bro-cut"
@@ -140,6 +144,32 @@ if __name__ == '__main__':
                 edge_label = "rpc_call"
             elif item[2] == "HOST_INFO::PORTMAP":
                 edge_label = "portmap"
+            elif item[2] == "HOST_INFO::NEW_CONNECTION_CONTENTS":
+                edge_label = "new_connection_contents"
+            elif item[2] == "HOST_INFO::CONNECTION-SYN-PACKET":
+                edge_label = "connection-SYN-packet"
+            elif item[2] == "HOST_INFO::TCP_PACKET":
+                edge_label = "tcp_packet"
+            elif item[2] == "HOST_INFO::CONNECTION-ESTABLISHED":
+                edge_label = "connection-established"
+            elif item[2] == "HOST_INFO::CONNECTION_FIRST_ACK":
+                edge_label = "connection_first_ack"
+            elif item[2] == "HOST_INFO::CONNECTION_EOF":
+                edge_label = "connection_eof"
+            elif item[2] == "HOST_INFO::CONNECTION_FINISHED":
+                edge_label = "connection_finished"
+            elif item[2] == "HOST_INFO::CONNECTION_PENDING":
+                edge_label = "connection_pending"
+            elif item[2] == "HOST_INFO::LOGIN_OUTPUT_LINE":
+                edge_label = "login_output_line"
+            elif item[2] == "HOST_INFO::LOGIN_INPUT_LINE":
+                edge_label = "login_input_line"
+            elif item[2] == "HOST_INFO::LOGIN_CONFUSED":
+                edge_label = "login_confused"
+            elif item[2] == "HOST_INFO::LOGIN_CONFUSED_TEXT":
+                edge_label = "login_confused_text"
+            elif item[2] == "HOST_INFO::LOGIN_SUCCESS":
+                edge_label = "login_success"
             t_src_ip = item[3]
             t_dst_ip = item[5]
             t_ts = item[0]

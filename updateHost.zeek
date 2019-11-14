@@ -136,8 +136,11 @@ export{
                             NET_EVENTS_LOG };# NET_EVENTS_LOG记录重要网络事件(或者网络包),作为KG分析的输入,BRO脚本分析多步攻击的数据集
 
     # 定义三元组中谓语的类型,输出的格式是HOST_INFO::ICMP_ECHO_REQUEST
+    # 增加事件,需要修改三处,第一处是relation类型,第二处是写日志的rec3,第三处是generate_graph.py中的边标签(改两个地方)
     type relation: enum {
-        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE, RPC_REPLY, RPC_CALL, PORTMAP
+        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE, RPC_REPLY, RPC_CALL, PORTMAP, NEW_CONNECTION_CONTENTS,
+        CONNECTION_SYN_PACKET, TCP_PACKET, CONNECTION_ESTABLISHED, CONNECTION_FIRST_ACK, CONNECTION_EOF, CONNECTION_FINISHED,
+        CONNECTION_PENDING, LOGIN_OUTPUT_LINE, LOGIN_INPUT_LINE, LOGIN_CONFUSED, LOGIN_CONFUSED_TEXT, LOGIN_SUCCESS
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -371,8 +374,8 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
     if(hinfo ?$ ip){
         for(i in hostlist){
             if(hostlist[i]$ip == hinfo$ip){# 如果有,更新一下,其实没有什么好更新的
-            print hostlist[i]$ip;
-            print hinfo$ip;
+            # print hostlist[i]$ip;
+            # print hinfo$ip;
                 update_single_host(hinfo, protocol, i);
                 has_updated = T;
                 break;
@@ -380,11 +383,11 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
         }
         # 如果没有,插入
         if(!has_updated){
-            print "a new ip comes";
-            print hinfo$ip;
-            print |hostlist|;
+            # print "a new ip comes";
+            # print hinfo$ip;
+            # print |hostlist|;
             hostlist[|hostlist|] = hinfo;
-            print |hostlist|;
+            # print |hostlist|;
             local wall_time1: time = network_time();
             local tmp_ip1: string = fmt("%s", hinfo$ip);
             # print hostlist[|hostlist|-1];
@@ -408,6 +411,24 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
             print "incomplete information, skip it ", hinfo;
         }
     }
+}
+
+function update_network_event(c: connection, host_description: string, protocol: string, event_description: string, event_type_para: relation){
+    # 记录资产,主机即资产
+    if(c$id ?$ orig_h && c$id ?$ resp_h){
+        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = host_description];
+        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = host_description];
+        update_hostlist(rec1, protocol);
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
+        update_hostlist(rec2, protocol);
+        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
+    }
+    # 记录事件,事件以边的形式呈现,必须连接两个点
+    local t: time = network_time();
+    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
+                                        $event_type = event_type_para, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
+                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = event_description];# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);    
 }
 
 function check_ssh_hostname(id: conn_id, uid: string, host: addr){
@@ -929,42 +950,12 @@ event packet_contents(c: connection, contents: string){
 event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_request!";
     # print c;
-    # 记录资产,主机即资产
-    if(c$id ?$ orig_h && c$id ?$ resp_h){
-        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_request"];
-        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_echo_request"];
-        update_hostlist(rec1, "icmp");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
-        update_hostlist(rec2, "icmp");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
-    }
-    # 记录事件,事件以边的形式呈现,必须连接两个点
-    local t: time = network_time();
-    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
-                                        $event_type = ICMP_ECHO_REQUEST, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
-                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
-    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
-    # print icmp;
+    update_network_event(c, "icmp_echo_request", "icmp", "a-ping-request-message", ICMP_ECHO_REQUEST);
 }
 
 event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
     print "icmp_echo_reply!";
-    # 记录资产,主机即资产
-    if(c$id ?$ orig_h && c$id ?$ resp_h){
-        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_echo_reply"];
-        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_echo_reply"];
-        update_hostlist(rec1, "icmp");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
-        update_hostlist(rec2, "icmp");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
-    }
-    # 记录事件,事件以边的形式呈现,必须连接两个点
-    local t: time = network_time();
-    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
-                                        $event_type = ICMP_ECHO_REPLY, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
-                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
-    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
-    # print icmp;
+    update_network_event(c, "icmp_echo_reply", "icmp", "a-ping-reply-message", ICMP_ECHO_REPLY);
 }
 
 event icmp_time_exceeded(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
@@ -1016,22 +1007,8 @@ event icmp_sent_payload(c: connection, icmp: icmp_conn, payload: string){
 
 event icmp_unreachable(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
     print "icmp_unreachable!";
-    # 记录资产,主机即资产
-    if(c$id ?$ orig_h && c$id ?$ resp_h){
-        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "icmp_unreachable"];
-        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "icmp_unreachable"];
-        update_hostlist(rec1, "icmp");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
-        update_hostlist(rec2, "icmp");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
-    }
-    # 记录事件,事件以边的形式呈现,必须连接两个点
-    local t: time = network_time();
-    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
-                                        $event_type = ICMP_UNREACHABLE, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
-                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p];
-    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
     # print icmp;
+    update_network_event(c, "icmp_unreachable", "icmp", "a-ping-failed", ICMP_UNREACHABLE);
 }
 
 # phase-2-dump
@@ -1042,21 +1019,7 @@ event icmp_unreachable(c: connection, icmp: icmp_conn, code: count, context: icm
 # 阶段2需要自己定义"事件"了,自带的事件没有触发
 function portmapper_call(c: connection){
     print "portmapper_call!";
-    # 记录资产,主机即资产
-    if(c$id ?$ orig_h && c$id ?$ resp_h){
-        local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "portmap"];
-        local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "portmap"];
-        update_hostlist(rec1, "portmap");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec1);
-        update_hostlist(rec2, "portmap");
-        Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
-    }
-    # 记录事件,事件以边的形式呈现,必须连接两个点
-    local t: time = network_time();
-    local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
-                                        $event_type = PORTMAP, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
-                                        $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = "SADMIND(100232)"];# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
-    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
+    update_network_event(c, "portmapper_call", "portmap", "SADMIND(100232)", PORTMAP);
 }
 
 # 从new_packet,packet_contents出发
@@ -1217,6 +1180,7 @@ event rpc_dialogue(c: connection, prog: count, ver: count, proc: count, status: 
 # 这边的实现,有误,可以触发rpc_reply,但是参数c是rpc_call的
 # 暂且认为rpc_reply触发代表出现了一对rpc调用
 # zeek将在3.1.0版本修复此bug
+# 这里不调用update_network_event
 event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count){
     # print c;
     # print status;
@@ -1264,6 +1228,7 @@ event new_connection_contents(c: connection){
     print "new_connection_contents!";
     # Generated when reassembly starts for a TCP connection. 
     # This event is raised at the moment when Zeek’s TCP analyzer enables stream reassembly for a connection.
+    update_network_event(c, "new_connection_contents", "tcp", "reassembly-starts-for-a-TCP-connection", CONNECTION_SYN_PACKET);# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
 }
 
 event connection_attempt(c: connection){
@@ -1281,6 +1246,7 @@ event connection_established(c: connection){
     # The final ACK of the handshake in response to SYN-ACK may or may not occur later,
     # one way to tell is to check the history field of connection to see if the originator sent an ACK,
     # indicated by ‘A’ in the history string.
+    update_network_event(c, "connection_established", "tcp", "see-a-synack-packet-from-a-tcp-handshake", CONNECTION_ESTABLISHED);
 }
 
 event partial_connection(c: connection){
@@ -1303,6 +1269,7 @@ event connection_finished(c: connection){
     print "connection_finished!";
     # Generated for a TCP connection that finished normally.
     # The event is raised when a regular FIN handshake from both endpoints was observed.
+    update_network_event(c, "connection_finished", "tcp", "a-tcp-connection-finished-normally", CONNECTION_FINISHED);
 }
 
 event connection_half_finished(c: connection){
@@ -1328,17 +1295,20 @@ event connection_reset(c: connection){
 event connection_pending(c: connection){
     print "connection_pending!";
     # Generated for each still-open TCP connection when Zeek terminates.
+    update_network_event(c, "connection_pending", "tcp", "a-still-open-tcp-connection", CONNECTION_PENDING);
 }
 
 event connection_SYN_packet(c: connection, pkt: SYN_packet){
     print "connection_SYN_packet!";
     # Generated for a SYN packet.
     # Zeek raises this event for every SYN packet seen by its TCP analyzer.
+    update_network_event(c, "connection_SYN_packet", "tcp", "a-SYN-packet-appears", CONNECTION_SYN_PACKET);
 }
 
 event connection_first_ACK(c: connection){
     print "connection_first_ACK!";
     # Generated for the first ACK packet seen for a TCP connection from its originator.
+    update_network_event(c, "connection_first_ack", "tcp", "the-first-ack-packet-seen-in-this-tcp-connection", CONNECTION_FIRST_ACK);
 }
 
 event connection_EOF(c: connection, is_orig: bool){
@@ -1346,6 +1316,7 @@ event connection_EOF(c: connection, is_orig: bool){
     # Generated at the end of reassembled TCP connections.
     # The TCP reassembler raised the event once for each endpoint of a connection
     # when it finished reassembling the corresponding side of the communication.
+    update_network_event(c, "connection_eof", "tcp", "the-end-of-reassembled-tcp-connections", CONNECTION_EOF);
 }
 
 event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: count, len: count, payload: string){
@@ -1355,6 +1326,9 @@ event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: c
     # It’s usually infeasible to handle when processing even medium volumes of traffic in real-time.
     # It’s slightly better than new_packet because it affects only TCP, but not much.
     # That said, if you work from a trace and want to do some packet-level analysis, it may come in handy.
+
+    # 这一条开销太大了,如果价值不大,就删掉
+    update_network_event(c, "tcp_packet", "tcp", "a-tcp-packet-appears", TCP_PACKET);
 }
 
 event tcp_option(c: connection, is_orig: bool, opt: count, optlen: count){
@@ -1462,6 +1436,7 @@ event login_confused(c: connection, msg: string, line: string){
     # As Zeek’s login analyzer uses a number of heuristics to
     # extract authentication information, it may become confused.
     # If it can no longer correctly track the authentication dialog, it raises this event.
+    update_network_event(c, "login_confused", "telnet", "tracking-of-Telnet/Rlogin-authentication-failed", LOGIN_CONFUSED);
 }
 
 event login_confused_text(c: connection, line: string){
@@ -1470,6 +1445,7 @@ event login_confused_text(c: connection, line: string){
     # a Telnet/Rlogin authentication dialog.
     # The login analyzer generates this even for every line
     # of user input after it has reported login_confused for a connection.
+    update_network_event(c, "login_confused_text", "telnet", "etting-confused-while-tracking-a-Telnet/Rlogin-authentication-dialog", LOGIN_CONFUSED_TEXT);
 }
 
 event login_display(c: connection, display: string){
@@ -1490,12 +1466,14 @@ event login_input_line(c: connection, line: string){
     print "login_input_line!";
     # Generated for lines of input on Telnet/Rlogin sessions.
     # The line will have control characters (such as in-band Telnet options) removed.
+    update_network_event(c, "login_input_line", "telnet", "lines-of-input-on-Telnet/Rlogin-sessions", LOGIN_INPUT_LINE);
 }
 
 event login_output_line(c: connection, line: string){
     print "login_output_line!";
     # Generated for lines of output on Telnet/Rlogin sessions.
     # The line will have control characters (such as in-band Telnet options) removed.
+    update_network_event(c, "login_output_line", "telnet", "lines-of-output-on-Telnet/Rlogin-sessions", LOGIN_OUTPUT_LINE);
 }
 
 event login_prompt(c: connection, prompt: string){
@@ -1511,6 +1489,7 @@ event login_success(c: connection, user: string, client_user: string, password: 
     # extract username and password information as well as the text
     # returned by the login server.
     # This event is raised if a login attempt appears to have been successful.
+    update_network_event(c, "login_success", "telnet", "successful-Telnet/Rlogin-logins", LOGIN_SUCCESS);
 }
 
 event login_terminal(c: connection, terminal: string){
@@ -1537,7 +1516,7 @@ function start_analyzers(){
     # enable RPC-based protocol analyzers
     Analyzer::register_for_ports(Analyzer::ANALYZER_PORTMAPPER, pm_ports);
     Analyzer::register_for_ports(Analyzer::ANALYZER_TELNET, telnet_ports);
-    Analyzer::enable_analyzer(Analyzer::ANALYZER_TELNET);
+    # Analyzer::enable_analyzer(Analyzer::ANALYZER_TELNET);
     Analyzer::enable_analyzer(Analyzer::ANALYZER_PORTMAPPER);
     for(e in analyzer_tags){
         Analyzer::enable_analyzer(e);

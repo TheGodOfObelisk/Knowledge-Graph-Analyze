@@ -10,7 +10,10 @@ events = []
 propertyKeys_txt = ["ip", "ts", "vertex_type", "edge_type", "time", "ips", "status", "src_ip", "src_p", "dst_ip", "dst_p", "description"]
 propertyKeys_int = ["frequency"]
 vertexTypes = ["entity"]
-edgeTypes = ["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap"]
+edgeTypes = 
+["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap", 
+ "new_connection_contents", "connection-SYN-packet", "tcp_packet", "connection_established",
+ "connection_first_ack"]
 
 if __name__ == '__main__':
     # cmd = "cat host-summary.log | bro-cut"
