@@ -38,7 +38,7 @@
 # 4. the way to check a ip already exist? etc: 192.168.1.5, 192.168.1.50 substring is not reliable
 # @load /home/lw/myKGA/signature_test.bro
 module HOST_INFO;
-
+@load /usr/local/zeek/share/zeek/base/frameworks/dpd/__load__.bro
 export{
 	# Create an ID for our new stream. By convention, this is
 	# called "HOST_INFO_LOG".

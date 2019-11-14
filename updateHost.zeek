@@ -43,7 +43,8 @@
 module HOST_INFO;
 
 const pm_ports = { 111/udp, 111/tcp };
-redef likely_server_ports += {pm_ports};
+const telnet_ports = { 23/tcp };
+redef likely_server_ports += {pm_ports, telnet_ports};
 
 redef ProtocolDetector::valids += {[Analyzer::ANALYZER_PORTMAPPER, 0.0.0.0, 111/udp] = ProtocolDetector::BOTH};
 
@@ -122,7 +123,9 @@ const analyzer_tags: set[Analyzer::Tag] = {
     Analyzer::ANALYZER_UDP,
     Analyzer::ANALYZER_VXLAN,
     Analyzer::ANALYZER_XMPP,
-    Analyzer::ANALYZER_ZIP
+    Analyzer::ANALYZER_ZIP,
+    Analyzer::ANALYZER_TELNET,
+    Analyzer::ANALYZER_RSH
 };
 
 export{
@@ -134,7 +137,7 @@ export{
 
     # 定义三元组中谓语的类型,输出的格式是HOST_INFO::ICMP_ECHO_REQUEST
     type relation: enum {
-        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE, RPC_REPLY, PORTMAP
+        Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE, RPC_REPLY, RPC_CALL, PORTMAP
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -907,10 +910,11 @@ event packet_contents(c: connection, contents: string){
         # print contents;
         portmapper_call(c);
         # num_packets += 1;
-    } else {
-        print c;
-        num_packets += 1;
-    }
+    } 
+    # else {
+    #     print c;
+    #     num_packets += 1;
+    # }
     # # print contents;
     # p_num -= 1;
 }
@@ -1210,7 +1214,9 @@ event rpc_dialogue(c: connection, prog: count, ver: count, proc: count, status: 
     print "rpc_dialogue!";
 }
 
-# 这边的实现,可能有误,明明是rpc_call
+# 这边的实现,有误,可以触发rpc_reply,但是参数c是rpc_call的
+# 暂且认为rpc_reply触发代表出现了一对rpc调用
+# zeek将在3.1.0版本修复此bug
 event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count){
     # print c;
     # print status;
@@ -1224,10 +1230,24 @@ event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count)
         Log::write(HOST_INFO::HOST_INFO_LOG, rec2);
     }
     # 记录事件,事件以边的形式呈现,必须连接两个点
+    # 先处理RPC_CALL事件
     local t: time = network_time();
     local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
-                                        $event_type = RPC_REPLY, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
+                                        $event_type = RPC_CALL, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
                                         $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = fmt("%s", status)];
+    Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
+    # 然后处理RPC_REPLY事件,源ip与目的ip颠倒,源端口与目的端口颠倒,但是发出的rpc_reply的节点的源端口不是111(被映射为一个未知端口,展示需要,先设为一个较大的数)
+    t = network_time();
+    local random_port: int = rand(65535);# 为展示需要设置一个虚假的源端口
+    while(random_port < 40000){
+        random_port = rand(65535);
+    }
+    local tmp_str: string = fmt("%d", random_port) + "/udp";
+    local fake_port: port = to_port(tmp_str);
+
+    rec3 = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
+                                        $event_type = RPC_REPLY, $src_ip = c$id$resp_h, $src_p = fake_port, 
+                                        $dst_ip = c$id$orig_h, $dst_p = c$id$orig_p, $description = fmt("%s", status)];
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
     print "rpc_reply!";
     # num_packets += 1;
@@ -1236,14 +1256,294 @@ event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count)
 # 考虑包内容中有resp_p=111/udp,其中111是portmapper的端口号得知此包与portmapper相关
 # 如何通过bro得知rpc调用了sadmind守护进程?
 
+# phase-3-dump
+# 阶段3涉及的主要协议有SADMIND,Portmap,TCP,TELNET
+# 先添加TCP和TELNET相关的事件,希望TELNET相关的事件可以触发
+# 一些关于TCP重传之类的非常频繁且价值不大的事件,可以考虑直接过滤掉
+event new_connection_contents(c: connection){
+    print "new_connection_contents!";
+    # Generated when reassembly starts for a TCP connection. 
+    # This event is raised at the moment when Zeek’s TCP analyzer enables stream reassembly for a connection.
+}
+
+event connection_attempt(c: connection){
+    print "connection_attempt!";
+    # Generated for an unsuccessful connection attempt.
+    # This event is raised when an originator unsuccessfully attempted to establish a connection.
+    # “Unsuccessful” is defined as at least tcp_attempt_delay seconds having elapsed 
+    # since the originator first sent a connection establishment packet to the destination without seeing a reply.
+}
+
+event connection_established(c: connection){
+    print "connection_established!";
+    # Generated when seeing a SYN-ACK packet from the responder in a TCP handshake.
+    # An associated SYN packet was not seen from the originator side if its state is not set to TCP_ESTABLISHED.
+    # The final ACK of the handshake in response to SYN-ACK may or may not occur later,
+    # one way to tell is to check the history field of connection to see if the originator sent an ACK,
+    # indicated by ‘A’ in the history string.
+}
+
+event partial_connection(c: connection){
+    print "partial_connection!";
+    # Generated for a new active TCP connection if Zeek did not see the initial handshake.
+    # This event is raised when Zeek has observed traffic from each endpoint,
+    # but the activity did not begin with the usual connection establishment.
+}
+
+event connection_partial_close(c: connection){
+    print "connection_partial_close!";
+    # Generated when a previously inactive endpoint attempts to close a TCP connection
+    # via a normal FIN handshake or an abort RST sequence.
+    # When the endpoint sent one of these packets, 
+    # Zeek waits tcp_partial_close_delay prior to generating the event,
+    # to give the other endpoint a chance to close the connection normally.
+}
+
+event connection_finished(c: connection){
+    print "connection_finished!";
+    # Generated for a TCP connection that finished normally.
+    # The event is raised when a regular FIN handshake from both endpoints was observed.
+}
+
+event connection_half_finished(c: connection){
+    print "connection_half_finished!";
+    # Generated when one endpoint of a TCP connection attempted to gracefully close the connection,
+    # but the other endpoint is in the TCP_INACTIVE state.
+    # This can happen due to split routing, in which Zeek only sees one side of a connection.
+}
+
+event connection_rejected(c: connection){
+    print "connection_rejected!";
+    # Generated for a rejected TCP connection.
+    # This event is raised when an originator attempted to setup a TCP connection
+    # but the responder replied with a RST packet denying it.
+}
+
+event connection_reset(c: connection){
+    print "connection_reset!";
+    # Generated when an endpoint aborted a TCP connection.
+    # The event is raised when one endpoint of an established TCP connection aborted by sending a RST packet.
+}
+
+event connection_pending(c: connection){
+    print "connection_pending!";
+    # Generated for each still-open TCP connection when Zeek terminates.
+}
+
+event connection_SYN_packet(c: connection, pkt: SYN_packet){
+    print "connection_SYN_packet!";
+    # Generated for a SYN packet.
+    # Zeek raises this event for every SYN packet seen by its TCP analyzer.
+}
+
+event connection_first_ACK(c: connection){
+    print "connection_first_ACK!";
+    # Generated for the first ACK packet seen for a TCP connection from its originator.
+}
+
+event connection_EOF(c: connection, is_orig: bool){
+    print "connection_EOF!";
+    # Generated at the end of reassembled TCP connections.
+    # The TCP reassembler raised the event once for each endpoint of a connection
+    # when it finished reassembling the corresponding side of the communication.
+}
+
+event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: count, len: count, payload: string){
+    print "tcp_packet!";
+    # Generated for every TCP packet.
+    # This is a very low-level and expensive event that should be avoided when at all possible.
+    # It’s usually infeasible to handle when processing even medium volumes of traffic in real-time.
+    # It’s slightly better than new_packet because it affects only TCP, but not much.
+    # That said, if you work from a trace and want to do some packet-level analysis, it may come in handy.
+}
+
+event tcp_option(c: connection, is_orig: bool, opt: count, optlen: count){
+    print "tcp_option!";
+    # Generated for each option found in a TCP header.
+    # Like many of the tcp_* events, this is a very low-level event and potentially expensive as it may be raised very often.
+}
+
+event tcp_contents(c: connection, is_orig: bool, seq: count, contents: string){
+    print "tcp_contents!";
+    # Generated for each chunk of reassembled TCP payload.
+    # When content delivery is enabled for a TCP connection
+    # (via tcp_content_delivery_ports_orig, tcp_content_delivery_ports_resp,
+    # tcp_content_deliver_all_orig, tcp_content_deliver_all_resp),
+    # this event is raised for each chunk of in-order payload reconstructed from the packet stream.
+    # Note that this event is potentially expensive if many connections carry significant
+    # amounts of data as then all that data needs to be passed on to the scripting layer.
+}
+
+event tcp_rexmit(c: connection, is_orig: bool, seq: count, len: count, data_in_flight: count, window: count){
+    print "tcp_rexmit!";
+    # Generated for each detected TCP segment retransmission.
+}
+
+event tcp_multiple_checksum_errors(c: connection, is_orig: bool, threshold: count){
+    print "tcp_multiple_checksum_errors!";
+    # Generated if a TCP flow crosses a checksum-error threshold, per ‘C’/’c’ history reporting.
+}
+
+event tcp_multiple_zero_windows(c: connection, is_orig: bool, threshold: count){
+    print "tcp_multiple_zero_windows!";
+    # Generated if a TCP flow crosses a zero-window threshold, per ‘W’/’w’ history reporting.
+}
+
+event tcp_multiple_retransmissions(c: connection, is_orig: bool, threshold: count){
+    print "tcp_multiple_retransmissions!";
+    # Generated if a TCP flow crosses a retransmission threshold, per ‘T’/’t’ history reporting.
+}
+
+event tcp_multiple_gap(c: connection, is_orig: bool, threshold: count){
+    print "tcp_multiple_gap!";
+    # Generated if a TCP flow crosses a gap threshold, per ‘G’/’g’ history reporting.
+}
+
+event contents_file_write_failure(c: connection, is_orig: bool, msg: string){
+    print "contents_file_write_failure!";
+    # Generated when failing to write contents of a TCP stream to a file.
+}
+# 以上是Zeek::TCP中的所有事件
+# Zeek_Login.events.bif.zeek中应该含有关于RSH调用和TELNET的信息
+
+event activating_encryption(c: connection){
+    print "activating_encryption!";
+    # Generated for Telnet sessions when encryption is activated.
+    # The Telnet protocol includes options for negotiating encryption.
+    # When such a series of options is successfully negotiated,
+    # the event engine generates this event.
+}
+
+event authentication_accepted(name: string, c: connection){
+    print "authentication_accepted!";
+    # Generated when a Telnet authentication has been successful.
+    # The Telnet protocol includes options for negotiating authentication.
+    # When such an option is sent from client to server and the server replies that it accepts the authentication,
+    # then the event engine generates this event.
+
+    # Todo
+    # Zeek’s current default configuration does not activate the protocol analyzer that generates this event;
+    # the corresponding script has not yet been ported. To still enable this event, 
+    # one needs to add a call to Analyzer::register_for_ports or a DPD payload signature.
+}
+
+event authentication_skipped(c: connection){
+    print "authentication_skipped!";
+    # Generated for Telnet/Rlogin sessions when a pattern match indicates that
+    # no authentication is performed.
+}
+
+event bad_option(c: connection){
+    print "bad_option!";
+    # Generated for an ill-formed or unrecognized Telnet option.
+}
+
+event bad_option_termination(c: connection){
+    print "bad_option_termination!";
+    # Generated for a Telnet option that’s incorrectly terminated.
+}
+
+event inconsistent_option(c: connection){
+    print "inconsistent_option!";
+    # Generated for an inconsistent Telnet option.
+    # Telnet options are specified by the client and server stating
+    # which options they are willing to support vs. which they are not,
+    # and then instructing one another which in fact they should
+    # or should not use for the current connection.
+    # If the event engine sees a peer violate either what
+    # the other peer has instructed it to do,
+    # or what it itself offered in terms of options in the past,
+    # then the engine generates this event.
+}
+
+event login_confused(c: connection, msg: string, line: string){
+    print "login_confused!";
+    # Generated when tracking of Telnet/Rlogin authentication failed.
+    # As Zeek’s login analyzer uses a number of heuristics to
+    # extract authentication information, it may become confused.
+    # If it can no longer correctly track the authentication dialog, it raises this event.
+}
+
+event login_confused_text(c: connection, line: string){
+    print "login_confused_text!";
+    # Generated after getting confused while tracking
+    # a Telnet/Rlogin authentication dialog.
+    # The login analyzer generates this even for every line
+    # of user input after it has reported login_confused for a connection.
+}
+
+event login_display(c: connection, display: string){
+    print "login_display!";
+    # Generated for clients transmitting an X11 DISPLAY in a Telnet session.
+    # This information is extracted out of environment variables sent as Telnet options.
+}
+
+event login_failure(c: connection, user: string, client_user: string, password: string, line: string){
+    print "login_failure!";
+    # Generated for Telnet/Rlogin login failures.
+    # The login analyzer inspects Telnet/Rlogin sessions to heuristically extract
+    # username and password information as well as the text returned by the login server.
+    # This event is raised if a login attempt appears to have been unsuccessful.
+}
+
+event login_input_line(c: connection, line: string){
+    print "login_input_line!";
+    # Generated for lines of input on Telnet/Rlogin sessions.
+    # The line will have control characters (such as in-band Telnet options) removed.
+}
+
+event login_output_line(c: connection, line: string){
+    print "login_output_line!";
+    # Generated for lines of output on Telnet/Rlogin sessions.
+    # The line will have control characters (such as in-band Telnet options) removed.
+}
+
+event login_prompt(c: connection, prompt: string){
+    print "login_prompt!";
+    # Generated for clients transmitting a terminal prompt in a Telnet session.
+    # This information is extracted out of environment variables sent as Telnet options.
+}
+
+event login_success(c: connection, user: string, client_user: string, password: string, line: string){
+    print "login_success!";
+    # Generated for successful Telnet/Rlogin logins.
+    # The login analyzer inspects Telnet/Rlogin sessions to heuristically
+    # extract username and password information as well as the text
+    # returned by the login server.
+    # This event is raised if a login attempt appears to have been successful.
+}
+
+event login_terminal(c: connection, terminal: string){
+    print "login_terminal!";
+    # Generated for clients transmitting a terminal type in a Telnet session.
+    # This information is extracted out of environment variables sent as Telnet options.
+}
+
+event rsh_reply(c: connection, client_user: string, server_user: string, line: string){
+    print "rsh_reply!";
+    # Generated for client side commands on an RSH connection.
+    # See RFC 1258 for more information about the Rlogin/Rsh protocol.
+}
+
+event rsh_request(c: connection, client_user: string, server_user: string, line: string, new_session: bool){
+    print "rsh_request!";
+    # Generated for client side commands on an RSH connection.
+    # See RFC 1258 for more information about the Rlogin/Rsh protocol.
+}
+# 以上是Zeek提供的和TELNET相关的事件,有相当一部分事件需要自己激活(为其注册端口)
+
+
 function start_analyzers(){
     # enable RPC-based protocol analyzers
     Analyzer::register_for_ports(Analyzer::ANALYZER_PORTMAPPER, pm_ports);
+    Analyzer::register_for_ports(Analyzer::ANALYZER_TELNET, telnet_ports);
+    Analyzer::enable_analyzer(Analyzer::ANALYZER_TELNET);
     Analyzer::enable_analyzer(Analyzer::ANALYZER_PORTMAPPER);
     for(e in analyzer_tags){
         Analyzer::enable_analyzer(e);
     }
 }
+
 
 event zeek_init() &priority=10{
     start_analyzers();
@@ -1270,9 +1570,9 @@ event zeek_done(){
     # local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMP_ECHO_REQUEST, $B=" "];# 三元组日志测试数据
     # Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
     # print Analyzer::registered_ports(Analyzer::ANALYZER_CONTENTS_RPC);
-    # print Analyzer::all_registered_ports();
+    print Analyzer::all_registered_ports();
     # print Analyzer::disabled_analyzers;
-    # print likely_server_ports;
+    print likely_server_ports;
     print num_packets;
 }
 
