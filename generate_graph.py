@@ -35,7 +35,8 @@ edgeTypes =
 ["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap", 
  "new_connection_contents", "connection-SYN-packet", "tcp_packet", "connection_established",
  "connection_first_ack", "connection_eof", "connection_finished", "connection_pending", "login_output_line",
- "login_input_line", "login_confused", "login_confused_text", "login_success"]
+ "login_input_line", "login_confused", "login_confused_text", "login_success", "rsh_request",
+ "rsh_reply", "connection_attempt", "login_terminal", "connection_half_finished", "login_display"]
 
 if __name__ == '__main__':
     # cmd = "cat host-summary.log | bro-cut"
@@ -170,6 +171,18 @@ if __name__ == '__main__':
                 edge_label = "login_confused_text"
             elif item[2] == "HOST_INFO::LOGIN_SUCCESS":
                 edge_label = "login_success"
+            elif item[2] == "HOST_INFO::RSH_REQUEST":
+                edge_label = "rsh_request"
+            elif item[2] == "HOST_INFO::RSH_REPLY":
+                edge_label = "rsh_reply"
+            elif item[2] == "HOST_INFO::CONNECTION_ATTEMPT":
+                edge_label = "connection_attempt"
+            elif item[2] == "HOST_INFO::LOGIN_TERMINAL":
+                item[2] = "login_terminal"
+            elif item[2] == "HOST_INFO::CONNECTION_HALF_FINISHED":
+                item[2] = "connection_half_finished"
+            elif item[2] == "HOST_INFO::LOGIN_DISPLAY":
+                item[2] = "login_display"
             t_src_ip = item[3]
             t_dst_ip = item[5]
             t_ts = item[0]

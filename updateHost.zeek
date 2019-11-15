@@ -44,12 +44,15 @@ module HOST_INFO;
 
 const pm_ports = { 111/udp, 111/tcp };
 const telnet_ports = { 23/tcp };
-redef likely_server_ports += {pm_ports, telnet_ports};
+const rsh_ports = { 514/tcp };
+redef likely_server_ports += {pm_ports, telnet_ports, rsh_ports};
 
 redef ProtocolDetector::valids += {[Analyzer::ANALYZER_PORTMAPPER, 0.0.0.0, 111/udp] = ProtocolDetector::BOTH};
 
 # declarations of my own events
 global portmapper_call: function(c: connection);
+
+global event_counts: int = 0;
 
 const analyzer_tags: set[Analyzer::Tag] = {
     Analyzer::ANALYZER_AYIYA,
@@ -140,7 +143,9 @@ export{
     type relation: enum {
         Empty, ICMP_ECHO_REQUEST, ICMP_ECHO_REPLY, ICMP_UNREACHABLE, RPC_REPLY, RPC_CALL, PORTMAP, NEW_CONNECTION_CONTENTS,
         CONNECTION_SYN_PACKET, TCP_PACKET, CONNECTION_ESTABLISHED, CONNECTION_FIRST_ACK, CONNECTION_EOF, CONNECTION_FINISHED,
-        CONNECTION_PENDING, LOGIN_OUTPUT_LINE, LOGIN_INPUT_LINE, LOGIN_CONFUSED, LOGIN_CONFUSED_TEXT, LOGIN_SUCCESS
+        CONNECTION_PENDING, LOGIN_OUTPUT_LINE, LOGIN_INPUT_LINE, LOGIN_CONFUSED, LOGIN_CONFUSED_TEXT, LOGIN_SUCCESS, RSH_REQUEST,
+        RSH_REPLY, CONNECTION_ATTEMPT, LOGIN_TERMINAL, CONNECTION_HALF_FINISHED, LOGIN_DISPLAY, HTTP_EVENT, HTTP_STATS, HTTP_END_ENTITY,
+        HTTP_MESSAGE_DONE, HTTP_CONTENT_TYPE
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -181,8 +186,16 @@ export{
 
 # Use it to store host-info
 global hostlist: vector of host_info = {};
-
+global events_not_recorded: table[string] of count = {};
 global num_packets = 0;
+
+function record_event(s: string){
+    if(s in events_not_recorded){
+        events_not_recorded[s] += 1;
+    } else {
+        events_not_recorded[s] = 1;
+    }
+}
 
 # Precondition: 0 <= index <= |hostlist|
 # Postcondition: cooresponding item has been updated
@@ -414,6 +427,8 @@ function update_hostlist(hinfo: HOST_INFO::host_info, protocol: string){
 }
 
 function update_network_event(c: connection, host_description: string, protocol: string, event_description: string, event_type_para: relation){
+    event_counts += 1;
+    print fmt("%d event(s) occurred.", event_counts);
     # 记录资产,主机即资产
     if(c$id ?$ orig_h && c$id ?$ resp_h){
         local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = host_description];
@@ -475,6 +490,7 @@ event arp_reply(mac_src: string, mac_dst: string, SPA: addr, SHA: string, TPA: a
 }
 
 event arp_request(mac_src: string, mac_dst: string, SPA: addr, SHA: string, TPA: addr, THA: string){
+    record_event("arp_request");
     # print "arp request";
     # print fmt("source mac: %s, destination mac: %s, SPA: %s, SHA: %s, TPA: %s, THA: %s", mac_src, mac_dst, SPA, SHA, TPA, THA);
     if(SHA != "ff:ff:ff:ff:ff:ff" && SHA != "00:00:00:00:00:00" && SPA != 0.0.0.0){
@@ -490,6 +506,7 @@ event arp_request(mac_src: string, mac_dst: string, SPA: addr, SHA: string, TPA:
 }
 
 event bad_arp(SPA: addr, SHA: string, TPA: addr, THA: string, explanation: string){
+    record_event("bad_arp");
     print fmt("this arp packet is bad because: %s", explanation);
 }
 
@@ -497,6 +514,7 @@ event dhcp_message(c: connection, is_orig: bool, msg: DHCP::Msg, options: DHCP::
     # print "A dhcp message is coming!";
     # print msg;
     # print options;
+    record_event("dhcp_message");
     if(options ?$ host_name && options ?$ addr_request && options ?$ client_id){ # It occurred once: missing client_id, check it in advance
         print "haha";
         # print options;
@@ -514,6 +532,7 @@ event dhcp_message(c: connection, is_orig: bool, msg: DHCP::Msg, options: DHCP::
 
 
 event ssh_auth_successful(c: connection, auth_method_none: bool){
+    record_event("ssh_auth_successful");
 	for ( host in set(c$id$orig_h, c$id$resp_h) )
 	{
 		check_ssh_hostname(c$id, c$uid, host);
@@ -521,6 +540,7 @@ event ssh_auth_successful(c: connection, auth_method_none: bool){
 }
 
 event dns_query_reply(c: connection, msg: dns_msg, query: string, qtype: count, qclass: count){
+    record_event("dns_query_reply");
     # print "here comes a dns query reply";
     # print c;
     # print msg;        
@@ -529,6 +549,7 @@ event dns_query_reply(c: connection, msg: dns_msg, query: string, qtype: count, 
 }
 
 event dns_A_reply(c: connection, msg: dns_msg, ans: dns_answer, a: addr){
+    record_event("dns_A_reply");
     # print "********************************TYPE A REPLY*********************";
     # print c;
     # print msg;#[id=0, opcode=0, rcode=0, QR=T, AA=T, TC=F, RD=F, RA=F, Z=0, num_queries=0, num_answers=1, num_auth=0, num_addl=0]
@@ -540,6 +561,7 @@ event dns_A_reply(c: connection, msg: dns_msg, ans: dns_answer, a: addr){
 }
 
 event dns_AAAA_reply(c: connection, msg: dns_msg, ans: dns_answer, a: addr){
+    record_event("dns_AAAA_reply");
     local rec: HOST_INFO::host_info = [$ts = network_time(), $ip = a, $hostname = ans$query, $description = "dns_AAAA_reply" ];
     update_hostlist(rec, "dns");
     Log::write(HOST_INFO::HOST_INFO_LOG, rec); 
@@ -547,6 +569,7 @@ event dns_AAAA_reply(c: connection, msg: dns_msg, ans: dns_answer, a: addr){
 
 # I want to get hostnames by event related to DNS.
 event dns_message(c: connection, is_orig: bool, msg: dns_msg, len: count){
+    record_event("dns_message");
     # print "dns_message";
     # print "1";
     # print c$dns_state$pending_queries;
@@ -594,42 +617,49 @@ event dns_message(c: connection, is_orig: bool, msg: dns_msg, len: count){
 }
 
 event dns_mapping_valid(dm: dns_mapping){
-    print "dns_mapping_valid";
-    print dm;
+    record_event("dns_mapping_valid");
+    # print "dns_mapping_valid";
+    # print dm;
 }
 
 event dns_mapping_altered(dm: dns_mapping, old_addrs: addr_set, new_addrs: addr_set){
-    print "dns_mapping_altered";
-    print dm;
+    record_event("dns_mapping_altered");
+    # print "dns_mapping_altered";
+    # print dm;
 }
 
 event dns_mapping_lost_name(dm: dns_mapping){
-    print "dns_mapping_lost_name";
-    print dm;
+    record_event("dns_mapping_lost_name");
+    # print "dns_mapping_lost_name";
+    # print dm;
 }
 
 event dns_mapping_new_name(dm: dns_mapping){
-    print "dns_mapping_new_name";
-    print dm;
+    record_event("dns_mapping_new_name");
+    # print "dns_mapping_new_name";
+    # print dm;
 }
 
 event dns_mapping_unverified(dm: dns_mapping){
-    print "dns_mapping_unverified";
-    print dm;
+    record_event("dns_mapping_unverified");
+    # print "dns_mapping_unverified";
+    # print dm;
 }
 
 
 
 event ntlm_authenticate(c: connection, request: NTLM::Authenticate){
-    print c;
-    print request;
-    if(request ?$ user_name){
-        print fmt("username: %s", request$user_name);
-    }
+    record_event("ntlm_authenticate");
+    # print c;
+    # print request;
+    # if(request ?$ user_name){
+    #     print fmt("username: %s", request$user_name);
+    # }
 }
 
 # collect more protocol information here
 event protocol_confirmation(c: connection, atype: Analyzer::Tag, aid: count){
+    record_event("protocol_confirmation");
     local src_ip: addr;
     local dst_ip: addr;
     local protocol: string;
@@ -874,6 +904,7 @@ event protocol_confirmation(c: connection, atype: Analyzer::Tag, aid: count){
 # try to get software info
 # Unfortunately, they haven't been triggered
 event software_unparsed_version_found(c: connection, host: addr, str: string){
+    record_event("software_unparsed_version_found");
     # fill app record
 }
 
@@ -884,45 +915,16 @@ event software_unparsed_version_found(c: connection, host: addr, str: string){
 # 基本数据包
 # A raw packet header, consisting of L2 header and everything in pkt_hdr. .
 # 比起packet_contents,raw_packet提供的信息更少,而且bro提出这两个事件的开销很大
-event raw_packet(p: raw_pkt_hdr){
-    # print "raw_packet!";
-    # print p;
-    # print p;
-    # if(p?$l2){
-    #     print p$l2;
-    # } else {
-    #     print "no l2";
-    # }
-    # if(p?$ip){
-    #     print p$ip;
-    # } else {
-    #     print "no ip field";
-    # }
-    # if(p?$ip6){
-    #     print p$ip6;
-    # } else {
-    #     print "no ip6 field";
-    # }
-    # if(p?$tcp){
-    #     print p$tcp;
-    # } else {
-    #     print "no tcp field";
-    # }
-    # if(p?$udp){
-    #     print p$udp;
-    # } else {
-    #     print "no udp field";
-    # }
-    # if(p?$icmp){
-    #     print p$icmp;
-    # } else {
-    #     print "no icmp field";
-    # }
-}
 
+# event raw_packet(p: raw_pkt_hdr){
+#     record_event("raw_packet");
+# }
+
+# 若不是portmap出问题,packet_contents也不要了,增加了很多不必要的开销
 event packet_contents(c: connection, contents: string){
     # print "packet_contents!";
     # print c$id$resp_p;
+    record_event("packet_contents");
     if(c$id$resp_p == 111/udp){
         # 这种情况视作一个rpc事件,对应phase2中的135个分组(总共148个)
         # 其实是对目标主机的111/udp端口进行端口扫描,bro没有提供这个事件,自己定制该事件
@@ -946,235 +948,330 @@ event packet_contents(c: connection, contents: string){
 # 网络流量图谱的分析计算依赖于Gremlin提供的强大的图计算能力
 
 # XX 放弃Gremlin脚本,调用hugegraph的http API传送json数据完成图更新操作
-# phase-1-dump
+# phase-1-dump 785个分组
 event icmp_echo_request(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
-    print "icmp_echo_request!";
-    # print c;
+    # Generated for ICMP echo request messages.
     update_network_event(c, "icmp_echo_request", "icmp", "a-ping-request-message", ICMP_ECHO_REQUEST);
 }
 
 event icmp_echo_reply(c: connection, icmp: icmp_conn, id: count, seq: count, payload: string){
-    print "icmp_echo_reply!";
+    # Generated for ICMP echo reply messages.
     update_network_event(c, "icmp_echo_reply", "icmp", "a-ping-reply-message", ICMP_ECHO_REPLY);
 }
 
 event icmp_time_exceeded(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
-    print "icmp_time_exceeded!";
+    record_event("icmp_time_exceeded");
+    # Generated for ICMP time exceeded messages.
 }
 
 event icmp_error_message(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
-    print "icmp_error_message!";
+    record_event("icmp_error_message");
+    # Generated for all ICMPv6 error messages that are not handled separately with dedicated events.
+    # Zeek’s ICMP analyzer handles a number of ICMP error messages directly with dedicated events.
+    # This event acts as a fallback for those it doesn’t.
 }
 
 event icmp_neighbor_advertisement(c: connection, icmp: icmp_conn, router: bool, solicited: bool,
 override: bool, tgt: addr, options: icmp6_nd_options){
-    print "icmp_neighbor_advertisement!";
+    record_event("icmp_neighbor_advertisement");
+    # Generated for ICMP neighbor advertisement messages.
 }
 
 event icmp_neighbor_solicitation(c: connection, icmp: icmp_conn, tgt: addr, options: icmp6_nd_options){
-    print "icmp_neighbor_solicitation!";
+    record_event("icmp_neighbor_solicitation");
+    # Generated for ICMP neighbor solicitation messages.
 }
 
 event icmp_packet_too_big(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
-    print "icmp_packet_too_big!";
+    record_event("icmp_packet_too_big");
+    # Generated for ICMPv6 packet too big messages.
 }
 
 event icmp_parameter_problem(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
-    print "icmp_parameter_problem!";
+    record_event("icmp_parameter_problem");
+    # Generated for ICMPv6 parameter problem messages.
 }
 
 event icmp_redirect(c: connection, icmp: icmp_conn, tgt: addr, dest: addr, options: icmp6_nd_options){
-    print "icmp_redirect!";
+    record_event("icmp_redirect");
+    # Generated for ICMP redirect messages.
 }
 
 event icmp_router_advertisement(c: connection, icmp: icmp_conn, cur_hop_limit: count, managed: bool,
 other: bool, home_agent: bool, pref: count, proxy: bool, res: count, router_lifetime: interval,
 reachable_time: interval, retrans_timer: interval, options: icmp6_nd_options){
-    print "icmp_router_advertisement!";
+    record_event("icmp_router_advertisement");
+    # Generated for ICMP router advertisement messages.
 }
 
 event icmp_router_solicitation(c: connection, icmp: icmp_conn, options: icmp6_nd_options){
-    print "icmp_router_solicitation!";
+    record_event("icmp_router_solicitation");
+    # Generated for ICMP router solicitation messages.
 }
 
 event icmp_sent(c: connection, icmp: icmp_conn){
-    print "icmp_sent!";
+    record_event("icmp_sent");
+    # Generated for all ICMP messages that are not handled separately with dedicated ICMP events.
+    # Zeek’s ICMP analyzer handles a number of ICMP messages directly with dedicated events.
+    # This event acts as a fallback for those it doesn’t.
 }
 
 event icmp_sent_payload(c: connection, icmp: icmp_conn, payload: string){
-    print "icmp_sent_payload!";
+    record_event("icmp_sent_payload");
+    # The same as icmp_sent except containing the ICMP payload.
 }
 
 event icmp_unreachable(c: connection, icmp: icmp_conn, code: count, context: icmp_context){
-    print "icmp_unreachable!";
-    # print icmp;
+    # Generated for ICMP destination unreachable messages.
     update_network_event(c, "icmp_unreachable", "icmp", "a-ping-failed", ICMP_UNREACHABLE);
 }
 
-# phase-2-dump
+# phase-2-dump 148个分组
 # pm related
 
 # ProtocolDetector::found_protocol
 
 # 阶段2需要自己定义"事件"了,自带的事件没有触发
 function portmapper_call(c: connection){
-    print "portmapper_call!";
     update_network_event(c, "portmapper_call", "portmap", "SADMIND(100232)", PORTMAP);
 }
 
 # 从new_packet,packet_contents出发
 event mount_proc_mnt(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t, rep: MOUNT3::mnt_reply_t){
-    print "mount_proc_mnt!";
+    record_event("mount_proc_mnt");
+    # Generated for MOUNT3 request/reply dialogues of type mnt.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out. MOUNT is a service running on top of RPC.
 }
 
 event mount_proc_not_implemented(c: connection, info: MOUNT3::info_t, proc: MOUNT3::proc_t){
-    print "mount_proc_not_implemented!";
+    record_event("mount_proc_not_implemented");
+    # Generated for MOUNT3 request/reply dialogues of a type that Zeek’s MOUNTv3 analyzer does not implement.
 }
 
 event mount_proc_null(c: connection, info: MOUNT3::info_t){
-    print "mount_proc_null!";
+    record_event("mount_proc_null");
+    # Generated for MOUNT3 request/reply dialogues of type null.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out. MOUNT is a service running on top of RPC.
 }
 
 event mount_proc_umnt(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t){
-    print "mount_proc_umnt!";
+    record_event("mount_proc_umnt");
+    # Generated for MOUNT3 request/reply dialogues of type umnt.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out. MOUNT is a service running on top of RPC.
 }
 
 event mount_proc_umnt_all(c: connection, info: MOUNT3::info_t, req: MOUNT3::dirmntargs_t){
-    print "mount_proc_umnt_all!";
+    record_event("mount_proc_umnt_all");
+    # Generated for MOUNT3 request/reply dialogues of type umnt_all.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out. MOUNT is a service running on top of RPC.
 }
 
 event mount_reply_status(n: connection, info: MOUNT3::info_t){
-    print "mount_reply_status!";
+    record_event("mount_reply_status");
+    # Generated for each MOUNT3 reply message received, reporting just the status included.
 }
 
 event nfs_proc_create(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::newobj_reply_t){
-    print "nfs_proc_create!";
+    record_event("nfs_proc_create");
+    # Generated for NFSv3 request/reply dialogues of type create.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
-event nfs_proc_getaddr(c: connection, info: NFS3::info_t, fh: string, attrs: NFS3::fattr_t){
-    print "nfs_proc_getaddr!";
+event nfs_proc_getattr(c: connection, info: NFS3::info_t, fh: string, attrs: NFS3::fattr_t){
+    record_event("nfs_proc_getattr");
+    # Generated for NFSv3 request/reply dialogues of type getattr.
+    # The event is generated once we have either seen both the request
+    # and its corresponding reply, or an unanswered request has timed out.
 }
 
 event nfs_proc_link(c: connection, info: NFS3::info_t, req: NFS3::linkargs_t, rep: NFS3::link_reply_t){
-    print "nfs_proc_link!";
+    record_event("nfs_proc_link");
+    # Generated for NFSv3 request/reply dialogues of type link.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_lookup(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::lookup_reply_t){
-    print "nfs_proc_lookup!";
+    record_event("nfs_proc_lookup");
+    # Generated for NFSv3 request/reply dialogues of type lookup.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_mkdir(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::newobj_reply_t){
-    print "nfs_proc_mkdir!";
+    record_event("nfs_proc_mkdir");
+    # Generated for NFSv3 request/reply dialogues of type mkdir.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_not_implemented(c: connection, info: NFS3::info_t, proc: NFS3::proc_t){
-    print "nfs_proc_not_implemented!";
+    record_event("nfs_proc_not_implemented");
+    # Generated for NFSv3 request/reply dialogues of a type that Zeek’s NFSv3 analyzer does not implement.
 }
 
 event nfs_proc_null(c: connection, info: NFS3::info_t){
-    print "nfs_proc_null!";
+    record_event("nfs_proc_null");
+    # Generated for NFSv3 request/reply dialogues of type null.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_read(c: connection, info: NFS3::info_t, req: NFS3::readargs_t, rep: NFS3::read_reply_t){
-    print "nfs_proc_read!";
+    record_event("nfs_proc_read");
+    # Generated for NFSv3 request/reply dialogues of type read.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_readdir(c: connection, info: NFS3::info_t, req: NFS3::readdirargs_t, rep: NFS3::readdir_reply_t){
-    print "nfs_proc_readdir!";
+    record_event("nfs_proc_readdir");
+    # Generated for NFSv3 request/reply dialogues of type readdir.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_readlink(c: connection, info: NFS3::info_t, fh: string, rep: NFS3::readlink_reply_t){
-    print "nfs_proc_readlink!";
+    record_event("nfs_proc_readlink");
+    # Generated for NFSv3 request/reply dialogues of type readlink.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_remove(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::delobj_reply_t){
-    print "nfs_proc_remove!";
+    record_event("nfs_proc_remove");
+    # Generated for NFSv3 request/reply dialogues of type remove.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_rename(c: connection, info: NFS3::info_t, req: NFS3::renameopargs_t, rep: NFS3::renameobj_reply_t){
-    print "nfs_proc_rename!";
+    record_event("nfs_proc_rename");
+    # Generated for NFSv3 request/reply dialogues of type rename.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_rmdir(c: connection, info: NFS3::info_t, req: NFS3::diropargs_t, rep: NFS3::delobj_reply_t){
-    print "nfs_proc_rmdir!";
+    record_event("nfs_proc_rmdir");
+    # Generated for NFSv3 request/reply dialogues of type rmdir.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_sattr(c: connection, info: NFS3::info_t, req: NFS3::sattrargs_t, rep: NFS3::sattr_reply_t){
-    print "nfs_proc_sattr!";
+    record_event("nfs_proc_sattr");
+    # Generated for NFSv3 request/reply dialogues of type sattr.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_symlink(c: connection, info: NFS3::info_t, req: NFS3::symlinkargs_t, rep: NFS3::newobj_reply_t){
-    print "nfs_proc_symlink!";
+    record_event("nfs_proc_symlink");
+    # Generated for NFSv3 request/reply dialogues of type symlink.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_proc_write(c: connection, info: NFS3::info_t, req: NFS3::writeargs_t, rep: NFS3::write_reply_t){
-    print "nfs_proc_write!";
+    record_event("nfs_proc_write");
+    # Generated for NFSv3 request/reply dialogues of type write.
+    # The event is generated once we have either seen both the request and its corresponding reply,
+    # or an unanswered request has timed out.
 }
 
 event nfs_reply_status(n: connection, info: NFS3::info_t){
-    print "nfs_reply_status!";
+    record_event("nfs_reply_status");
+    # Generated for each NFSv3 reply message received, reporting just the status included.
 }
 
 #--上面是关于nfs的调用事件--
 
 event pm_attempt_getport(r: connection, status: rpc_status, pr: pm_port_request){
-    print "pm_attempt_getport!";
+    record_event("pm_attempt_getport");
+    # Generated for failed Portmapper requests of type getport.
 }
 
 event pm_attempt_dump(r: connection, status: rpc_status){
-    print "pm_attempt_dump!";
+    record_event("pm_attempt_dump");
+    # Generated for failed Portmapper requests of type dump.
 }
 
 event pm_attempt_callit(r: connection, status: rpc_status, call: pm_callit_request){
-    print "pm_attempt_callit!";
+    record_event("pm_attempt_callit");
+    # Generated for failed Portmapper requests of type callit.
 }
 
 event pm_attempt_null(r: connection, status: rpc_status){
-    print "pm_attempt_null!";
+    record_event("pm_attempt_null");
+    # Generated for failed Portmapper requests of type null.
 }
 
 event pm_attempt_set(r: connection, status: rpc_status, m: pm_mapping){
-    print "pm_attempt_set!";
+    record_event("pm_attempt_set");
+    # Generated for failed Portmapper requests of type set.
 }
 
 event pm_attempt_unset(r: connection, status: rpc_status, m: pm_mapping){
-    print "pm_attempt_unset!";
+    record_event("pm_attempt_unset");
+    # Generated for failed Portmapper requests of type unset.
 }
 
 event pm_bad_port(r: connection, bad_p: count){
-    print "pm_bad_port!";
+    record_event("pm_bad_port");
+    # Generated for Portmapper requests or replies that include an invalid port number.
+    # Since ports are represented by unsigned 4-byte integers,
+    # they can stray outside the allowed range of 0–65535 by being >= 65536.
+    # If so, this event is generated.
 }
 
 event pm_request_callit(r: connection, call: pm_callit_request, p: port){
-    print "pm_request_callit!";
+    record_event("pm_request_callit");
+    # Generated for Portmapper request/reply dialogues of type callit.
 }
 
 event pm_request_dump(r: connection, m: pm_mappings){
-    print "pm_request_dump!";
+    record_event("pm_request_dump");
+    # Generated for Portmapper request/reply dialogues of type dump.
 }
 
 event pm_request_getport(r: connection, pr: pm_port_request, p: port){
-    print "pm_request_getport!";
+    record_event("pm_request_getport");
+    # Generated for Portmapper request/reply dialogues of type getport.
 }
 
 event pm_request_null(r: connection){
-    print "pm_request_null!";
+    record_event("pm_request_null");
+    # Generated for Portmapper requests of type null.
 }
 
 event pm_request_set(r: connection, m: pm_mapping, success: bool){
-    print "pm_request_set!";
+    record_event("pm_request_set");
+    # Generated for Portmapper request/reply dialogues of type set.
 }
 
 event pm_request_unset(r: connection, m: pm_mapping, success: bool){
-    print "pm_request_unset!";
+    record_event("pm_request_unset");
+    # enerated for Portmapper request/reply dialogues of type unset.
 }
 
 event rpc_call(c: connection, xid: count, prog: count, ver: count, proc: count, call_len: count){
-    print "rpc_call!";
+    record_event("rpc_call");
+    # Generated for RPC call messages.
 }
 
 event rpc_dialogue(c: connection, prog: count, ver: count, proc: count, status: rpc_status, start_time: time, call_len: count, reply_len: count){
-    print "rpc_dialogue!";
+    record_event("rpc_dialogue");
+    # Generated for RPC request/reply pairs.
+    # The RPC analyzer associates request and reply by their transaction identifiers
+    # and raises this event once both have been seen.
+    # If there’s not a reply, this event will still be generated eventually on timeout.
+    # In that case, status will be set to RPC_TIMEOUT.
 }
 
 # 这边的实现,有误,可以触发rpc_reply,但是参数c是rpc_call的
@@ -1185,6 +1282,7 @@ event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count)
     # print c;
     # print status;
     # 记录资产,主机即资产
+    # Generated for RPC reply messages.
     if(c$id ?$ orig_h && c$id ?$ resp_h){
         local rec1: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$orig_h, $description = "rpc_reply"];
         local rec2: HOST_INFO::host_info = [$ts = network_time(), $ip = c$id$resp_h, $description = "rpc_reply"];
@@ -1213,34 +1311,32 @@ event rpc_reply(c: connection, xid: count, status: rpc_status, reply_len: count)
                                         $event_type = RPC_REPLY, $src_ip = c$id$resp_h, $src_p = fake_port, 
                                         $dst_ip = c$id$orig_h, $dst_p = c$id$orig_p, $description = fmt("%s", status)];
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);
-    print "rpc_reply!";
     # num_packets += 1;
 }
 # 上面是关于pm和rpc的,可惜一个都没有触发
 # 考虑包内容中有resp_p=111/udp,其中111是portmapper的端口号得知此包与portmapper相关
 # 如何通过bro得知rpc调用了sadmind守护进程?
 
-# phase-3-dump
+# phase-3-dump 530个分组
 # 阶段3涉及的主要协议有SADMIND,Portmap,TCP,TELNET
 # 先添加TCP和TELNET相关的事件,希望TELNET相关的事件可以触发
 # 一些关于TCP重传之类的非常频繁且价值不大的事件,可以考虑直接过滤掉
 event new_connection_contents(c: connection){
-    print "new_connection_contents!";
     # Generated when reassembly starts for a TCP connection. 
     # This event is raised at the moment when Zeek’s TCP analyzer enables stream reassembly for a connection.
     update_network_event(c, "new_connection_contents", "tcp", "reassembly-starts-for-a-TCP-connection", CONNECTION_SYN_PACKET);# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
 }
 
 event connection_attempt(c: connection){
-    print "connection_attempt!";
+    # record_event("connection_attempt");
     # Generated for an unsuccessful connection attempt.
     # This event is raised when an originator unsuccessfully attempted to establish a connection.
     # “Unsuccessful” is defined as at least tcp_attempt_delay seconds having elapsed 
     # since the originator first sent a connection establishment packet to the destination without seeing a reply.
+    update_network_event(c, "connection_attempt", "tcp", "an-unsuccessful-connection-attempt", CONNECTION_ATTEMPT);
 }
 
 event connection_established(c: connection){
-    print "connection_established!";
     # Generated when seeing a SYN-ACK packet from the responder in a TCP handshake.
     # An associated SYN packet was not seen from the originator side if its state is not set to TCP_ESTABLISHED.
     # The final ACK of the handshake in response to SYN-ACK may or may not occur later,
@@ -1250,14 +1346,14 @@ event connection_established(c: connection){
 }
 
 event partial_connection(c: connection){
-    print "partial_connection!";
+    record_event("partial_connection");
     # Generated for a new active TCP connection if Zeek did not see the initial handshake.
     # This event is raised when Zeek has observed traffic from each endpoint,
     # but the activity did not begin with the usual connection establishment.
 }
 
 event connection_partial_close(c: connection){
-    print "connection_partial_close!";
+    record_event("connection_partial_close");
     # Generated when a previously inactive endpoint attempts to close a TCP connection
     # via a normal FIN handshake or an abort RST sequence.
     # When the endpoint sent one of these packets, 
@@ -1266,53 +1362,49 @@ event connection_partial_close(c: connection){
 }
 
 event connection_finished(c: connection){
-    print "connection_finished!";
     # Generated for a TCP connection that finished normally.
     # The event is raised when a regular FIN handshake from both endpoints was observed.
     update_network_event(c, "connection_finished", "tcp", "a-tcp-connection-finished-normally", CONNECTION_FINISHED);
 }
 
 event connection_half_finished(c: connection){
-    print "connection_half_finished!";
+    # record_event("connection_half_finished");
     # Generated when one endpoint of a TCP connection attempted to gracefully close the connection,
     # but the other endpoint is in the TCP_INACTIVE state.
     # This can happen due to split routing, in which Zeek only sees one side of a connection.
+    update_network_event(c, "connection_half_finished", "tcp", "This-can-happen-due-to-split-routing", CONNECTION_HALF_FINISHED);
 }
 
 event connection_rejected(c: connection){
-    print "connection_rejected!";
+    record_event("connection_rejected");
     # Generated for a rejected TCP connection.
     # This event is raised when an originator attempted to setup a TCP connection
     # but the responder replied with a RST packet denying it.
 }
 
 event connection_reset(c: connection){
-    print "connection_reset!";
+    record_event("connection_reset");
     # Generated when an endpoint aborted a TCP connection.
     # The event is raised when one endpoint of an established TCP connection aborted by sending a RST packet.
 }
 
 event connection_pending(c: connection){
-    print "connection_pending!";
     # Generated for each still-open TCP connection when Zeek terminates.
     update_network_event(c, "connection_pending", "tcp", "a-still-open-tcp-connection", CONNECTION_PENDING);
 }
 
 event connection_SYN_packet(c: connection, pkt: SYN_packet){
-    print "connection_SYN_packet!";
     # Generated for a SYN packet.
     # Zeek raises this event for every SYN packet seen by its TCP analyzer.
     update_network_event(c, "connection_SYN_packet", "tcp", "a-SYN-packet-appears", CONNECTION_SYN_PACKET);
 }
 
 event connection_first_ACK(c: connection){
-    print "connection_first_ACK!";
     # Generated for the first ACK packet seen for a TCP connection from its originator.
     update_network_event(c, "connection_first_ack", "tcp", "the-first-ack-packet-seen-in-this-tcp-connection", CONNECTION_FIRST_ACK);
 }
 
 event connection_EOF(c: connection, is_orig: bool){
-    print "connection_EOF!";
     # Generated at the end of reassembled TCP connections.
     # The TCP reassembler raised the event once for each endpoint of a connection
     # when it finished reassembling the corresponding side of the communication.
@@ -1320,7 +1412,6 @@ event connection_EOF(c: connection, is_orig: bool){
 }
 
 event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: count, len: count, payload: string){
-    print "tcp_packet!";
     # Generated for every TCP packet.
     # This is a very low-level and expensive event that should be avoided when at all possible.
     # It’s usually infeasible to handle when processing even medium volumes of traffic in real-time.
@@ -1332,13 +1423,13 @@ event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: c
 }
 
 event tcp_option(c: connection, is_orig: bool, opt: count, optlen: count){
-    print "tcp_option!";
+    record_event("tcp_option");
     # Generated for each option found in a TCP header.
     # Like many of the tcp_* events, this is a very low-level event and potentially expensive as it may be raised very often.
 }
 
 event tcp_contents(c: connection, is_orig: bool, seq: count, contents: string){
-    print "tcp_contents!";
+    record_event("tcp_contents");
     # Generated for each chunk of reassembled TCP payload.
     # When content delivery is enabled for a TCP connection
     # (via tcp_content_delivery_ports_orig, tcp_content_delivery_ports_resp,
@@ -1349,39 +1440,39 @@ event tcp_contents(c: connection, is_orig: bool, seq: count, contents: string){
 }
 
 event tcp_rexmit(c: connection, is_orig: bool, seq: count, len: count, data_in_flight: count, window: count){
-    print "tcp_rexmit!";
+    record_event("tcp_rexmit");
     # Generated for each detected TCP segment retransmission.
 }
 
 event tcp_multiple_checksum_errors(c: connection, is_orig: bool, threshold: count){
-    print "tcp_multiple_checksum_errors!";
+    record_event("tcp_multiple_checksum_errors");
     # Generated if a TCP flow crosses a checksum-error threshold, per ‘C’/’c’ history reporting.
 }
 
 event tcp_multiple_zero_windows(c: connection, is_orig: bool, threshold: count){
-    print "tcp_multiple_zero_windows!";
+    record_event("tcp_multiple_zero_windows");
     # Generated if a TCP flow crosses a zero-window threshold, per ‘W’/’w’ history reporting.
 }
 
 event tcp_multiple_retransmissions(c: connection, is_orig: bool, threshold: count){
-    print "tcp_multiple_retransmissions!";
+    record_event("tcp_multiple_retransmissions");
     # Generated if a TCP flow crosses a retransmission threshold, per ‘T’/’t’ history reporting.
 }
 
 event tcp_multiple_gap(c: connection, is_orig: bool, threshold: count){
-    print "tcp_multiple_gap!";
+    record_event("tcp_multiple_gap");
     # Generated if a TCP flow crosses a gap threshold, per ‘G’/’g’ history reporting.
 }
 
 event contents_file_write_failure(c: connection, is_orig: bool, msg: string){
-    print "contents_file_write_failure!";
+    record_event("contents_file_write_failure");
     # Generated when failing to write contents of a TCP stream to a file.
 }
 # 以上是Zeek::TCP中的所有事件
 # Zeek_Login.events.bif.zeek中应该含有关于RSH调用和TELNET的信息
 
 event activating_encryption(c: connection){
-    print "activating_encryption!";
+    record_event("activating_encryption");
     # Generated for Telnet sessions when encryption is activated.
     # The Telnet protocol includes options for negotiating encryption.
     # When such a series of options is successfully negotiated,
@@ -1389,7 +1480,7 @@ event activating_encryption(c: connection){
 }
 
 event authentication_accepted(name: string, c: connection){
-    print "authentication_accepted!";
+    record_event("authentication_accepted");
     # Generated when a Telnet authentication has been successful.
     # The Telnet protocol includes options for negotiating authentication.
     # When such an option is sent from client to server and the server replies that it accepts the authentication,
@@ -1402,23 +1493,23 @@ event authentication_accepted(name: string, c: connection){
 }
 
 event authentication_skipped(c: connection){
-    print "authentication_skipped!";
+    record_event("authentication_skipped");
     # Generated for Telnet/Rlogin sessions when a pattern match indicates that
     # no authentication is performed.
 }
 
 event bad_option(c: connection){
-    print "bad_option!";
+    record_event("bad_option");
     # Generated for an ill-formed or unrecognized Telnet option.
 }
 
 event bad_option_termination(c: connection){
-    print "bad_option_termination!";
+    record_event("bad_option_termination");
     # Generated for a Telnet option that’s incorrectly terminated.
 }
 
 event inconsistent_option(c: connection){
-    print "inconsistent_option!";
+    record_event("inconsistent_option");
     # Generated for an inconsistent Telnet option.
     # Telnet options are specified by the client and server stating
     # which options they are willing to support vs. which they are not,
@@ -1431,7 +1522,6 @@ event inconsistent_option(c: connection){
 }
 
 event login_confused(c: connection, msg: string, line: string){
-    print "login_confused!";
     # Generated when tracking of Telnet/Rlogin authentication failed.
     # As Zeek’s login analyzer uses a number of heuristics to
     # extract authentication information, it may become confused.
@@ -1440,22 +1530,22 @@ event login_confused(c: connection, msg: string, line: string){
 }
 
 event login_confused_text(c: connection, line: string){
-    print "login_confused_text!";
     # Generated after getting confused while tracking
     # a Telnet/Rlogin authentication dialog.
     # The login analyzer generates this even for every line
     # of user input after it has reported login_confused for a connection.
-    update_network_event(c, "login_confused_text", "telnet", "etting-confused-while-tracking-a-Telnet/Rlogin-authentication-dialog", LOGIN_CONFUSED_TEXT);
+    update_network_event(c, "login_confused_text", "telnet", "getting-confused-while-tracking-a-Telnet/Rlogin-authentication-dialog", LOGIN_CONFUSED_TEXT);
 }
 
 event login_display(c: connection, display: string){
-    print "login_display!";
+    record_event("login_display");
     # Generated for clients transmitting an X11 DISPLAY in a Telnet session.
     # This information is extracted out of environment variables sent as Telnet options.
+    update_network_event(c, "login_display", "telnet", "clients-transmitting-an-X11-DISPLAY-in-a-Telnet-session", LOGIN_DISPLAY);
 }
 
 event login_failure(c: connection, user: string, client_user: string, password: string, line: string){
-    print "login_failure!";
+    record_event("login_failure");
     # Generated for Telnet/Rlogin login failures.
     # The login analyzer inspects Telnet/Rlogin sessions to heuristically extract
     # username and password information as well as the text returned by the login server.
@@ -1463,27 +1553,24 @@ event login_failure(c: connection, user: string, client_user: string, password: 
 }
 
 event login_input_line(c: connection, line: string){
-    print "login_input_line!";
     # Generated for lines of input on Telnet/Rlogin sessions.
     # The line will have control characters (such as in-band Telnet options) removed.
     update_network_event(c, "login_input_line", "telnet", "lines-of-input-on-Telnet/Rlogin-sessions", LOGIN_INPUT_LINE);
 }
 
 event login_output_line(c: connection, line: string){
-    print "login_output_line!";
     # Generated for lines of output on Telnet/Rlogin sessions.
     # The line will have control characters (such as in-band Telnet options) removed.
     update_network_event(c, "login_output_line", "telnet", "lines-of-output-on-Telnet/Rlogin-sessions", LOGIN_OUTPUT_LINE);
 }
 
 event login_prompt(c: connection, prompt: string){
-    print "login_prompt!";
+    record_event("login_prompt");
     # Generated for clients transmitting a terminal prompt in a Telnet session.
     # This information is extracted out of environment variables sent as Telnet options.
 }
 
 event login_success(c: connection, user: string, client_user: string, password: string, line: string){
-    print "login_success!";
     # Generated for successful Telnet/Rlogin logins.
     # The login analyzer inspects Telnet/Rlogin sessions to heuristically
     # extract username and password information as well as the text
@@ -1493,29 +1580,159 @@ event login_success(c: connection, user: string, client_user: string, password: 
 }
 
 event login_terminal(c: connection, terminal: string){
-    print "login_terminal!";
+    # record_event("login_terminal");
     # Generated for clients transmitting a terminal type in a Telnet session.
     # This information is extracted out of environment variables sent as Telnet options.
+    update_network_event(c, "login_terminal", "telnet", "clients-transmitting-a-terminal-type-in-a-Telnet-session", LOGIN_TERMINAL);
 }
 
+# phase-4-dump 526个分组
+# 该阶段攻击主机往目标主机上安装DDOS工具,大量触发rsh_request和rsh_reply事件
+
 event rsh_reply(c: connection, client_user: string, server_user: string, line: string){
-    print "rsh_reply!";
     # Generated for client side commands on an RSH connection.
     # See RFC 1258 for more information about the Rlogin/Rsh protocol.
+    local des: string = fmt("rsh-connection-client_user:%s,server_user:%s", client_user, server_user);
+    update_network_event(c, "rsh_reply", "rsh", des, RSH_REPLY);
 }
 
 event rsh_request(c: connection, client_user: string, server_user: string, line: string, new_session: bool){
-    print "rsh_request!";
     # Generated for client side commands on an RSH connection.
     # See RFC 1258 for more information about the Rlogin/Rsh protocol.
+    local des: string = fmt("rsh-connection-client_user:%s,server_user:%s", client_user, server_user);
+    update_network_event(c, "rsh_request", "rsh", des, RSH_REQUEST);
 }
 # 以上是Zeek提供的和TELNET相关的事件,有相当一部分事件需要自己激活(为其注册端口)
+
+# phase-5-dump 分组最多的阶段 34553个分组 DDOS工具开始运作
+# HTTP相关协议
+event http_request(c: connection, method: string, original_URI: string, unescaped_URI: string, version: string){
+    record_event("http_request");
+    # Generated for HTTP requests.
+    # Zeek supports persistent and pipelined HTTP sessions
+    # and raises corresponding events as it parses client/server dialogues.
+    # This event is generated as soon as a request’s initial line has been parsed,
+    # and before any http_header events are raised.
+}
+
+event http_reply(c: connection, version: string, code: count, reason: string){
+    record_event("http_reply");
+    # Generated for HTTP replies.
+    # Zeek supports persistent and pipelined HTTP sessions
+    # and raises corresponding events as it parses client/server dialogues.
+    # This event is generated as soon as a reply’s initial line has been parsed,
+    # and before any http_header events are raised.
+}
+
+event http_header(c: connection, is_orig: bool, name: string, value: string){
+    record_event("http_header");
+    # Generated for HTTP headers.
+    # Zeek supports persistent and pipelined HTTP sessions
+    # and raises corresponding events as it parses client/server dialogues.
+}
+
+event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list){
+    record_event("http_all_headers");
+    # record_event("http_all_headers");
+    # Generated for HTTP headers, passing on all headers of
+    # an HTTP message at once.
+    # Zeek supports persistent and pipelined HTTP sessions
+    # and raises corresponding events as it parses client/server dialogues.
+}
+
+event http_begin_entity(c: connection, is_orig: bool){
+    record_event("http_begin_entity");
+    # Generated when starting to parse an HTTP body entity.
+    # This event is generated at least once for each non-empty
+    # (client or server) HTTP body; and potentially more than once
+    # if the body contains further nested MIME entities.
+    # Zeek raises this event just before it starts parsing each entity’s content.
+}
+
+event http_end_entity(c: connection, is_orig: bool){
+    # record_event("http_end_entity");
+    # Generated when finishing parsing an HTTP body entity.
+    # This event is generated at least once for each non-empty
+    # (client or server) HTTP body; and potentially more than once
+    # if the body contains further nested MIME entities.
+    # Zeek raises this event at the point when it has finished
+    # parsing an entity’s content.
+    update_network_event(c, "http_end_entity", "http", "finish-parsing-an-HTTP-body-entity", HTTP_END_ENTITY);
+}
+
+event http_entity_data(c: connection, is_orig: bool, length: count, data: string){
+    record_event("http_entity_data");
+    # Generated when parsing an HTTP body entity, passing on the data.
+    # This event can potentially be raised many times for each entity,
+    # each time passing a chunk of the data of not further defined size.
+
+    # A common idiom for using this event is to first reassemble the data
+    # at the scripting layer by concatenating it to a successively growing string;
+    # and only perform further content analysis once the corresponding http_end_entity event
+    # has been raised. Note, however, that doing so can be quite expensive for HTTP tranders.
+    # At the very least, one should impose an upper size limit on how much data is being buffered.
+}
+
+event http_content_type(c: connection, is_orig: bool, ty: string, subty: string){
+    # record_event("http_content_type");
+    # Generated for reporting an HTTP body’s content type.
+    # This event is generated at the end of parsing an HTTP header,
+    # passing on the MIME type as specified by the Content-Type header.
+    # If that header is missing, this event is still raised with a default value of text/plain.
+    update_network_event(c, "http_content_type", "http", "passing-on-the-MIME-typed", HTTP_CONTENT_TYPE);
+}
+
+event http_message_done(c: connection, is_orig: bool, stat: http_message_stat){
+    # record_event("http_message_done");
+    # Generated once at the end of parsing an HTTP message.
+    # Zeek supports persistent and pipelined HTTP sessions and raises
+    # corresponding events as it parses client/server dialogues.
+    # A “message” is one top-level HTTP entity, such as a complete request or reply.
+    # Each message can have further nested sub-entities inside.
+    # This event is raised once all sub-entities belonging to a top-level message
+    # have been processed (and their corresponding http_entity_* events generated).
+    update_network_event(c, "http_message_done", "http", "a-top-level-message-have-been-processed", HTTP_MESSAGE_DONE);
+}
+
+event http_event(c: connection, event_type: string, detail: string){
+    # record_event("http_event");
+    # Generated for errors found when decoding HTTP requests or replies.
+    update_network_event(c, "http_event", "http", detail, HTTP_EVENT);# 注意一下detail的内容
+}
+
+event http_stats(c: connection, stats: http_stats_rec){
+    # record_event("http_stats");
+    # Generated at the end of an HTTP session to report statistics about it.
+    # This event is raised after all of an HTTP session’s requests and replies have been fully processed.
+    update_network_event(c, "http_stats", "http", "an-http-session-finished-and-stats-generated", HTTP_STATS);
+}
+
+event http_connection_upgrade(c: connection, protocol: string){
+    record_event("http_connection_upgrade");
+    # Generated when a HTTP session is upgraded to a different protocol (e.g. websocket).
+    # This event is raised when a server replies with a HTTP 101 reply.
+    # No more HTTP events will be raised after this event.
+}
+
+# [http_entity_data] = 226,
+# [http_begin_entity] = 55,
+# [http_header] = 217,
+# [http_reply] = 55,
+# [http_all_headers] = 55,
+# [http_content_type] = 55,
+# [http_message_done] = 55,
+# [http_end_entity] = 55,
+# [http_stats] = 45,
+# [http_event] = 24
 
 
 function start_analyzers(){
     # enable RPC-based protocol analyzers
     Analyzer::register_for_ports(Analyzer::ANALYZER_PORTMAPPER, pm_ports);
+    # enable telnet protocol analyzers
     Analyzer::register_for_ports(Analyzer::ANALYZER_TELNET, telnet_ports);
+    # enable rsh protocol analyzers
+    Analyzer::register_for_ports(Analyzer::ANALYZER_RSH, rsh_ports);
     # Analyzer::enable_analyzer(Analyzer::ANALYZER_TELNET);
     Analyzer::enable_analyzer(Analyzer::ANALYZER_PORTMAPPER);
     for(e in analyzer_tags){
@@ -1549,9 +1766,10 @@ event zeek_done(){
     # local rec1: HOST_INFO::kg_info = [$ts=network_time(), $A=" ", $predicate=ICMP_ECHO_REQUEST, $B=" "];# 三元组日志测试数据
     # Log::write(HOST_INFO::NET_EVENTS_LOG, rec1);
     # print Analyzer::registered_ports(Analyzer::ANALYZER_CONTENTS_RPC);
-    print Analyzer::all_registered_ports();
+    # print Analyzer::all_registered_ports();
     # print Analyzer::disabled_analyzers;
-    print likely_server_ports;
-    print num_packets;
+    # print likely_server_ports;
+    # print num_packets;
+    print events_not_recorded;
 }
 
