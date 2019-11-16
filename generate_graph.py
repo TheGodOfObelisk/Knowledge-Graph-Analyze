@@ -31,14 +31,24 @@ events = []
 propertyKeys_txt = ["ip", "ts", "vertex_type", "edge_type", "time", "ips", "status", "src_ip", "src_p", "dst_ip", "dst_p", "description"]
 propertyKeys_int = ["frequency"]
 vertexTypes = ["entity"]
-edgeTypes = 
-["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap", 
- "new_connection_contents", "connection-SYN-packet", "tcp_packet", "connection_established",
+edgeTypes = ["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap", 
+ "new_connection_contents", "connection_SYN_packet", "tcp_packet", "connection_established",
  "connection_first_ack", "connection_eof", "connection_finished", "connection_pending", "login_output_line",
  "login_input_line", "login_confused", "login_confused_text", "login_success", "rsh_request",
- "rsh_reply", "connection_attempt", "login_terminal", "connection_half_finished", "login_display"]
+ "rsh_reply", "connection_attempt", "login_terminal", "connection_half_finished", "login_display",
+ "http_event", "http_stats", "http_end_entity", "http_message_done", "heep_content_type",
+ "http_all_headers", "http_reply", "http_header", "http_begin_entity", "http_entity_data"]
+
+edge_type_value = []
 
 if __name__ == '__main__':
+    n = 1
+    for i in edgeTypes:
+        dict_item = {}
+        dict_item[i] = n
+        n += 1
+        edge_type_value.append(dict_item)
+    print edge_type_value
     # cmd = "cat host-summary.log | bro-cut"
     with open("gremlin_scripts_0", "w") as f:
         for item in propertyKeys_txt:
@@ -148,7 +158,7 @@ if __name__ == '__main__':
             elif item[2] == "HOST_INFO::NEW_CONNECTION_CONTENTS":
                 edge_label = "new_connection_contents"
             elif item[2] == "HOST_INFO::CONNECTION-SYN-PACKET":
-                edge_label = "connection-SYN-packet"
+                edge_label = "connection_SYN_packet"
             elif item[2] == "HOST_INFO::TCP_PACKET":
                 edge_label = "tcp_packet"
             elif item[2] == "HOST_INFO::CONNECTION-ESTABLISHED":
@@ -183,6 +193,26 @@ if __name__ == '__main__':
                 item[2] = "connection_half_finished"
             elif item[2] == "HOST_INFO::LOGIN_DISPLAY":
                 item[2] = "login_display"
+            elif item[2] == "HOST_INFO::HTTP_EVENT":
+                item[2] = "http_event"
+            elif item[2] == "HOST_INFO::HTTP_STATS":
+                item[2] = "http_stats"
+            elif item[2] == "HOST_INFO::HTTP_END_ENTITY":
+                item[2] = "http_end_entity"
+            elif item[2] == "HOST_INFO::HTTP_MESSAGE_DONE":
+                item[2] = "http_message_done"
+            elif item[2] == "HOST_INFO::HTTP_CONTENT_TYPE":
+                item[2] = "http_content_type"
+            elif item[2] == "HOST_INFO::HTTP_ALL_HEADERS":
+                item[2] = "http_all_headers"
+            elif item[2] == "HOST_INFO::HTTP_REPLY":
+                item[2] = "http_reply"
+            elif item[2] == "HOST_INFO::HTTP_HEADER":
+                item[2] = "http_header"
+            elif item[2] == "HOST_INFO::HTTP_BEGIN_ENTITY":
+                item[2] = "http_begin_entity"
+            elif item[2] == "HOST_INFO::HTTP_ENTITY_DATA":
+                item[2] = "http_entity_data"
             t_src_ip = item[3]
             t_dst_ip = item[5]
             t_ts = item[0]
@@ -190,6 +220,10 @@ if __name__ == '__main__':
             t_src_p = item[4]
             t_dst_p = item[6]
             t_description = item[7]
+            # 先确认是否已经有相同事件记录,若有,frequency递增,若没有,加入新边
+            # 1. 按预计的边id查询边,GET方法,自己拼凑边id ok, 参照putmethod.py中,使用request方法
+            # 2. 查看结果,有边,则frequency+1,更新边属性,PUT方法 
+            # 3. 无边,插入新边,已经写好
             requestbody = """'{
                 "label": "%s",
                 "outV": "1:%s",

@@ -145,7 +145,7 @@ export{
         CONNECTION_SYN_PACKET, TCP_PACKET, CONNECTION_ESTABLISHED, CONNECTION_FIRST_ACK, CONNECTION_EOF, CONNECTION_FINISHED,
         CONNECTION_PENDING, LOGIN_OUTPUT_LINE, LOGIN_INPUT_LINE, LOGIN_CONFUSED, LOGIN_CONFUSED_TEXT, LOGIN_SUCCESS, RSH_REQUEST,
         RSH_REPLY, CONNECTION_ATTEMPT, LOGIN_TERMINAL, CONNECTION_HALF_FINISHED, LOGIN_DISPLAY, HTTP_EVENT, HTTP_STATS, HTTP_END_ENTITY,
-        HTTP_MESSAGE_DONE, HTTP_CONTENT_TYPE
+        HTTP_MESSAGE_DONE, HTTP_CONTENT_TYPE, HTTP_ALL_HEADERS, HTTP_REPLY, HTTP_HEADER, HTTP_BEGIN_ENTITY, HTTP_ENTITY_DATA
     };
     # unfortunately, its json format is incorrect
     # We need to handle the json format output line by line
@@ -1538,7 +1538,7 @@ event login_confused_text(c: connection, line: string){
 }
 
 event login_display(c: connection, display: string){
-    record_event("login_display");
+    # record_event("login_display");
     # Generated for clients transmitting an X11 DISPLAY in a Telnet session.
     # This information is extracted out of environment variables sent as Telnet options.
     update_network_event(c, "login_display", "telnet", "clients-transmitting-an-X11-DISPLAY-in-a-Telnet-session", LOGIN_DISPLAY);
@@ -1616,37 +1616,40 @@ event http_request(c: connection, method: string, original_URI: string, unescape
 }
 
 event http_reply(c: connection, version: string, code: count, reason: string){
-    record_event("http_reply");
+    # record_event("http_reply");
     # Generated for HTTP replies.
     # Zeek supports persistent and pipelined HTTP sessions
     # and raises corresponding events as it parses client/server dialogues.
     # This event is generated as soon as a reply’s initial line has been parsed,
     # and before any http_header events are raised.
+    update_network_event(c, "http_reply", "http", "a-reply’s-initial-line-has-been-parsed", HTTP_REPLY);
 }
 
 event http_header(c: connection, is_orig: bool, name: string, value: string){
-    record_event("http_header");
+    # record_event("http_header");
     # Generated for HTTP headers.
     # Zeek supports persistent and pipelined HTTP sessions
     # and raises corresponding events as it parses client/server dialogues.
+    update_network_event(c, "http_header", "http", "Generated-for-HTTP-headers", HTTP_HEADER);
 }
 
 event http_all_headers(c: connection, is_orig: bool, hlist: mime_header_list){
-    record_event("http_all_headers");
     # record_event("http_all_headers");
     # Generated for HTTP headers, passing on all headers of
     # an HTTP message at once.
     # Zeek supports persistent and pipelined HTTP sessions
     # and raises corresponding events as it parses client/server dialogues.
+    update_network_event(c, "http_all_headers", "http", "passing-on-all-headers-of-an-HTTP-message-at-once", HTTP_ALL_HEADERS);
 }
 
 event http_begin_entity(c: connection, is_orig: bool){
-    record_event("http_begin_entity");
+    # record_event("http_begin_entity");
     # Generated when starting to parse an HTTP body entity.
     # This event is generated at least once for each non-empty
     # (client or server) HTTP body; and potentially more than once
     # if the body contains further nested MIME entities.
     # Zeek raises this event just before it starts parsing each entity’s content.
+    update_network_event(c, "http_begin_entity", "http", "generated-for-each non-empty-(client-or-server)-HTTP-body", HTTP_BEGIN_ENTITY);
 }
 
 event http_end_entity(c: connection, is_orig: bool){
@@ -1661,7 +1664,7 @@ event http_end_entity(c: connection, is_orig: bool){
 }
 
 event http_entity_data(c: connection, is_orig: bool, length: count, data: string){
-    record_event("http_entity_data");
+    # record_event("http_entity_data");
     # Generated when parsing an HTTP body entity, passing on the data.
     # This event can potentially be raised many times for each entity,
     # each time passing a chunk of the data of not further defined size.
@@ -1671,6 +1674,7 @@ event http_entity_data(c: connection, is_orig: bool, length: count, data: string
     # and only perform further content analysis once the corresponding http_end_entity event
     # has been raised. Note, however, that doing so can be quite expensive for HTTP tranders.
     # At the very least, one should impose an upper size limit on how much data is being buffered.
+    update_network_event(c, "http_entity_data", "http", "pass-on-the-data", HTTP_ENTITY_DATA);
 }
 
 event http_content_type(c: connection, is_orig: bool, ty: string, subty: string){
