@@ -5,7 +5,7 @@
 # ok
 # import json
 # import requests
-
+# 根据边id查询边数据
 # url = "http://localhost:8080/graphs/hugegraph/graph/edges/S1:202.77.162.213>1>>S1:172.16.113.95"
 # response = requests.get(url)
 # print response.status_code
@@ -45,23 +45,23 @@
 # # 访问方法，并返回结果
 # print putMesParent()
 
-#!/usr/bin/env python
+# !/usr/bin/env python
 # -*- coding:utf-8 -*-
 # File: http_put.py
 
-# import urllib2
-# import json
+import urllib2
+import json
 
-# def http_put():
-#     url="""http://localhost:8080/graphs/hugegraph/graph/edges/\"S1:202.77.162.213>1>>S1:172.16.113.95\"?action=append"""
-#     values={"properties":{"frequency": 2}}
+def http_put():
+    url="""http://localhost:8080/graphs/hugegraph/graph/edges/\"S1:202.77.162.213>1>>S1:172.16.113.95\"?action=append"""
+    values={"properties":{"frequency": 2}}
 
-#     jdata = json.dumps(values)                  # 对数据进行JSON格式化编码
-#     request = urllib2.Request(url, jdata)
-#     request.add_header('Content-Type', 'application/json')
-#     request.get_method = lambda:'PUT'           # 设置HTTP的访问方式
-#     request = urllib2.urlopen(request)
-#     return request.read()
+    jdata = json.dumps(values)                  # 对数据进行JSON格式化编码
+    request = urllib2.Request(url, jdata)
+    request.add_header('Content-Type', 'application/json')
+    request.get_method = lambda:'PUT'           # 设置HTTP的访问方式
+    request = urllib2.urlopen(request)
+    return request.read()
 
-# resp = http_put()
-# print resp
+resp = http_put()
+print resp

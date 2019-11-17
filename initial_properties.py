@@ -68,15 +68,21 @@ if __name__ == '__main__':
     # sub.communicate()
     # str1 = str1.decode()
     # print str1
-    requestbody = """'{
-            "name": "entityByip",
-            "base_type": "VERTEX_LABEL",
-            "base_value": "entity",
-            "index_type": "SECONDARY",
-            "fields": [
-                "ip"
-            ]
-        }'"""
-    cmd = """curl -X POST -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/schema/indexlabels -d"""
+
+
+    # requestbody = """'{
+    #         "name": "entityByip",
+    #         "base_type": "VERTEX_LABEL",
+    #         "base_value": "entity",
+    #         "index_type": "SECONDARY",
+    #         "fields": [
+    #             "ip"
+    #         ]
+    #     }'"""
+    # cmd = """curl -X POST -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/schema/indexlabels -d"""
+
+
+    requestbody = """'{"properties":{"frequency": 2}}'"""
+    cmd="""curl -X PUT -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/graph/edges/"S1:202.77.162.213>1>>S1:172.16.113.95"?action=append -d"""
     cmd = cmd + requestbody
     print cmd
