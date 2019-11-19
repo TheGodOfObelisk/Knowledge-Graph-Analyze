@@ -136,7 +136,17 @@ export{
 	# called "HOST_INFO_LOG".
 	redef enum Log::ID += { HOST_INFO_LOG,
                             SUMMARY_HOST_LOG,
-                            NET_EVENTS_LOG };# NET_EVENTS_LOG记录重要网络事件(或者网络包),作为KG分析的输入,BRO脚本分析多步攻击的数据集
+                            NET_EVENTS_LOG,
+                            ATTACK_PATTERN_EVENT_LOG };# NET_EVENTS_LOG记录重要网络事件(或者网络包),作为KG分析的输入,BRO脚本分析多步攻击的数据集
+
+    # 攻击模式更关注拓扑结构,没有大量的实际数据属性,借用一下zeek的日志输出功能,转化为易于使用的模式点,模式边文件
+    # 不如只记录边,点边一起更新
+    type pattern_event: record{
+        name: string    &log;# 事件两端的点的标签名字,attack_pattern_n的模式
+        id: int     &log;# 同一模式下有多个边,每个边再用id区分
+        event_type: string     &log;# 与基本事件的类型对应
+        edge_content: string    &log;# 设为形同"1>2"的字符串,分解后先加边,后加点,1和2含在点的name中
+    };
 
     # 定义三元组中谓语的类型,输出的格式是HOST_INFO::ICMP_ECHO_REQUEST
     # 增加事件,需要修改三处,第一处是relation类型,第二处是写日志的rec3,第三处是generate_graph.py中的边标签(改两个地方)
@@ -443,6 +453,13 @@ function update_network_event(c: connection, host_description: string, protocol:
     local rec3: HOST_INFO::event_info = [$ts = network_time(), $real_time = fmt("%s", strftime("%Y-%m-%d-%H:%M:%S", t)), 
                                         $event_type = event_type_para, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
                                         $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = event_description];# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
+    # icmp_echo_reply的地址内容应该和icmp_echo_request的地址内容反过来
+    if(host_description == "icmp_echo_reply"){
+        rec3$src_ip = c$id$resp_h;
+        rec3$src_p = c$id$resp_p;
+        rec3$dst_ip = c$id$orig_h;
+        rec3$dst_p = c$id$orig_p;
+    }
     Log::write(HOST_INFO::NET_EVENTS_LOG, rec3);    
 }
 
@@ -1745,6 +1762,26 @@ function start_analyzers(){
 }
 
 
+function attack_pattern_event_logger(){
+    # 如果想实现数据独立性,考虑使用输入框架
+    local attack_rel = string_vec("icmp_echo_ping|0>1", "icmp_echo_ping|0>2", "icmp_echo_ping|0>3", "icmp_echo_reply|1<0");
+    local tmp_n: int = 0;
+
+    print attack_rel;
+    while(tmp_n < |attack_rel|){
+        # print type_name(item);
+        local tmp_tlb: string_vec = split_string(attack_rel[tmp_n], /\|/);
+        local rec: HOST_INFO::pattern_event = [$name="attack_pattern_0", $id=tmp_n, $event_type=tmp_tlb[0], $edge_content=tmp_tlb[1]];
+        Log::write(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, rec);
+        tmp_n += 1;
+    }
+}
+
+function attack_pattern_logger(){
+    Log::create_stream(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, [$columns=pattern_event, $path="attack_pattern_event"]);
+    attack_pattern_event_logger();
+}
+
 event zeek_init() &priority=10{
     start_analyzers();
     # Analyzer::register_for_ports(Analyzer::ANALYZER_CONTENTS_RPC, pm_ports);
@@ -1775,5 +1812,6 @@ event zeek_done(){
     # print likely_server_ports;
     # print num_packets;
     print events_not_recorded;
+    attack_pattern_logger();
 }
 
