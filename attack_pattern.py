@@ -59,6 +59,15 @@ def addEdge(v1, v2, event_label, edge_num):
     print str1
     return
 
+# 攻击特征子图发现,通过gremlin提供的subgraph功能,先作一步过滤
+# 过滤方法(基于边标签)
+# 边标签可以取自攻击特征子图的边属性
+# gremlin提供的子图中的所有节点,都可能参与/被波及
+# 然后关注子图的点出度,出度高的点,可疑度高
+
+gremline_for_pattern_0 = """subGraph = g.E().hasLabel('icmp_echo_ping').subgraph('subGraph').cap('subGraph').next()
+                            sg = subGraph.traversal()
+                            sg.E()"""
 
 if __name__ == '__main__':
     # for key in property_keys:
