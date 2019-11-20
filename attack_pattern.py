@@ -18,6 +18,48 @@ def extractText(text):
     res = text.split(' ')
     return res
 
+def addNode(v):
+    requestbody = """'{
+        "label": "attack_pattern_0",
+        "properties": {
+            "pattern_node_id": %s
+        }
+    }'"""%v
+    # 实际上是整数
+    cmd = """curl -X POST -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/graph/vertices -d"""
+    cmd = cmd + requestbody
+    print cmd
+    sub = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE)
+    str1 = sub.stdout.read()
+    sub.communicate()
+    str1 = str1.decode()
+    print str1
+    return
+
+def addEdge(v1, v2, event_label, edge_num):
+    # 必须知道两点的id,很糟
+    requestbody = """'{
+        "label": "attack_event_0",
+        "outV": "2:%s",
+        "inV": "2:%s",
+        "outVLabel": "attack_pattern_0",
+        "inVLabel": "attack_pattern_0",
+        "properties": {
+            "pattern_edge_id": %s,
+            "event_label": "%s"
+        }
+    }
+    '"""%(v1, v2, edge_num, event_label)
+    cmd =  """curl -X POST -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/graph/edges -d"""
+    cmd = cmd + requestbody
+    sub = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE)
+    str1 = sub.stdout.read()
+    sub.communicate()
+    str1 = str1.decode()
+    print str1
+    return
+
+
 if __name__ == '__main__':
     # for key in property_keys:
     #     requestbody = """'{
@@ -48,22 +90,22 @@ if __name__ == '__main__':
 
     # 攻击模式边标签
     # 没办法了,要标明源节点和目的节点的标签,标签的爆炸式增长
-    # requestbody = """'{
-    #     "name": "attack_event_0",
-    #     "source_label": "attack_pattern_0",
-    #     "target_label": "attack_pattern_0",
-    #     "frequency": "SINGLE",
-    #     "properties": [
-    #         "pattern_edge_id",
-    #         "event_label"
-    #     ],
-    #     "sort_keys": [],
-    #     "nullable_keys": [],
-    #     "enable_label_index": true
-    # }'"""
-    # cmd = """curl -X POST -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/schema/edgelabels -d"""
-    # cmd += requestbody
-    # print cmd
+    requestbody = """'{
+        "name": "attack_event_0",
+        "source_label": "attack_pattern_0",
+        "target_label": "attack_pattern_0",
+        "frequency": "SINGLE",
+        "properties": [
+            "pattern_edge_id",
+            "event_label"
+        ],
+        "sort_keys": [],
+        "nullable_keys": [],
+        "enable_label_index": true
+    }'"""
+    cmd = """curl -X POST -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/schema/edgelabels -d"""
+    cmd += requestbody
+    print cmd
 
     cmd = "awk '/^[^#]/ {print $1, $2, $3, $4}' attack_pattern_event.log"
     r = os.popen(cmd)
@@ -81,7 +123,13 @@ if __name__ == '__main__':
         res = item[3].split('>')
         print res
         # 先建点,再建边
-        print res[0]
-        print res[1]
+        v1 = res[0]
+        v2 = res[1]
+        addNode(v1)
+        addNode(v2)
+        event_label = item[2]
+        edge_num = item[1]
+        addEdge(v1, v2, event_label, edge_num)
+        
 
 
