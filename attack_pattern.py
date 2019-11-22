@@ -65,10 +65,6 @@ def addEdge(v1, v2, event_label, edge_num):
 # gremlin提供的子图中的所有节点,都可能参与/被波及
 # 然后关注子图的点出度,出度高的点,可疑度高
 
-gremline_for_pattern_0 = """subGraph = g.E().hasLabel('icmp_echo_ping').subgraph('subGraph').cap('subGraph').next()
-                            sg = subGraph.traversal()
-                            sg.E()"""
-
 if __name__ == '__main__':
     # for key in property_keys:
     #     requestbody = """'{
@@ -140,5 +136,8 @@ if __name__ == '__main__':
         edge_num = item[1]
         addEdge(v1, v2, event_label, edge_num)
         
-
+    gremline_for_pattern_0 = """subGraph = g.E().hasLabel('icmp_echo_ping').subgraph('subGraph').cap('subGraph').next()
+                            sg = subGraph.traversal()
+                            sg.E()"""
+    # 按边标签过滤,抽取子图
 
