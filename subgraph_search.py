@@ -55,10 +55,13 @@ import requests
 # 5. 分析返回结果
 
 # 子图匹配步骤:
-# 1. 从攻击模式图中提取边事件类型(攻击模式图按照0,1,2,3,...编号)
+# 1. 从攻击模式图中提取特征信息(攻击模式图按照0,1,2,3,...编号)
 #    gremlin脚本文件或者Restful API获取标签为attack_event_n的的边集合
+#    特征信息包括:0点出边事件类型,0点到其他点的最远距离,环信息(如何表示?)
 # 2. 按边事件类型提取子图,得到边集合,去除不关心的边(数据过滤1))
 #    gremlin提供了subgraph方法
+#    各种事件类型缺一不可,这里搜的边事件类型是和0号节点直接相连的事件类型(相对重要)
+#    比如0->1->2,1->2的事件可以在最后一步模式匹配的时候再关心(皮之不存,毛将焉附)
 # 3. 分析边集合,按照TIME WINDOW进行初步筛选,去除过旧的边(数据过滤2)
 #    本地数据分析,JSON格式的边数据
 # 4. 从边集合中提取点集合,得到过滤后的子图(该子图怎么存储,计算?)
@@ -83,9 +86,12 @@ def execute_command(cmd):
     return str1
 
 if __name__ == '__main__':
-    cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
-    execute_command(cmd)
-    
+    # cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
+    # execute_command(cmd)
+    MAX_DISTANCE = 0
+    TIME_WINDOW = 0
+    KEY_EVENTS = []
+    K = 1
 
 
 
