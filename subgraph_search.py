@@ -22,7 +22,40 @@ import requests
 # print response.status_code
 # print response.text
 
-# 例子
+# Restful API例子
+# url中的特殊字符编码规范:  https://www.w3cschool.cn/htmltags/html-urlencode.html
+
+# http://localhost:8080/graphs/hugegraph/traversers/kout?source=%222:0%22&max_depth=1
+# 从"2:0"点出发,一步可达的点集合,可以继续增加max_depth的值,当返回空时,max_depth=MAX_DISTANCE-1
+# 用不着最短路径了,自带的最短路径用不了
+
+# gremlin例子
+# g.V().as('a').out('icmp_echo_ping').as('b').select('a','b')
+# 由icmp_echo_ping类型的边相连的两个点的信息
+
+# g.V().as('a').out('icmp_echo_ping').as('b').select('a','b').by('ip')
+# 由icmp_echo_ping类型的边相连的两个点的ip的信息,
+
+# g.V().where(out('icmp_echo_ping')).values('ip')
+# 有icmp_echo_ping类型出边的点的ip值
+
+# g.V().where(out('attack_event_0').count().is(gte(6))).values('pattern_node_id')
+# 取出边类型为attack_event_0,且该类型出边条数大于等于6的点(的pattern_node_id值)
+
+# g.V().where(__.not(out('icmp_echo_ping'))).where(__.in('icmp_echo_reply')).values('ip')
+# 取出没有类型为icmp_echo_ping的出边,但是有icmp_echo_reply的入边的点(的ip)
+
+# g.V().where(out('rpc_call').where(out('rpc_reply'))).values('ip')
+# 取出有类型为rpc_call的出边,且接着这个出边,有类型为rpc_reply的第二跳出边的点(的ip)
+
+# g.V('2:0').outE('attack_event_0').values('event_label')
+# 取出从可疑点触发的攻击事件边的事件类型(会有重复),复杂一点,记下数量?
+# g.E().hasLabel('attack_event_0').values('event_label')
+# 攻击模式0下所有的边事件类型
+
+# g.V('1:202.77.162.213').out().out().path()
+# 从点202.77.162.213出发,连续两个出变的路线
+
 # g.V().and(outE('icmp_echo_ping'), values('ip').is('202.77.162.213')).values('ts')
 # 有icmp_echo_ping类型出边,且ip为202.77.162.213的点的ts值
 
@@ -37,6 +70,10 @@ import requests
 # 模式1: "a"对应当前节点,有icmp_echo_ping的入边
 # 模式2: "b"对应节点"202.77.162.213"
 # 效果: 得到从b出发的,且距离为1的所有节点对
+
+# g.V('2:0').bothE().otherV().simplePath().path()
+# g.V('2:0').both().both().cyclicPath().path()
+
 
 # 需要的gremline功能
 # 在图sg中,取出其中所有满足某个边属性条件的,边
@@ -88,10 +125,20 @@ def execute_command(cmd):
 if __name__ == '__main__':
     # cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
     # execute_command(cmd)
-    MAX_DISTANCE = 0
-    TIME_WINDOW = 0
-    KEY_EVENTS = []
-    K = 1
+    MAX_DISTANCE = 0 # ok
+    TIME_WINDOW = 0 # 自己设
+    KEY_EVENTS = [] # 取和0点相连的attack_event_n的边的event_label属性, ok
+    EVENT_CHAIN_PATHS = []
+    EVENT_CHAIN_CYCLICPATHS = []
+    K = 1 # 自己设
+    # 从特征图中提取以下要素
+    # 从可疑节点出发的匹配规则
+    # K值(前K个可疑点),ok
+    # 最大距离(限制匹配范围),ok
+    # 环的处理(模式匹配/连续out匹配),环仍然要化为匹配规则
+
+    # 匹配规则的格式:
+    # 可疑点出发,攻击事件链(思路,从攻击模式图中查找所有的事件链组合,重复也没事,链上每一步可能有不止一个事件(兼备,只要模式匹配能达到这个要求就行))
 
 
 
