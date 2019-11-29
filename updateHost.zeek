@@ -1766,7 +1766,7 @@ function attack_pattern_event_logger(){
     # 如果想实现数据独立性,考虑使用输入框架
     # 仔细想了一下,ping扫描事件根本就不需要reply啊
     # ping的太少也不行,稍微多一点才合适
-    local attack_rel = string_vec("icmp_echo_ping|0>1", "icmp_echo_ping|0>2", "icmp_echo_ping|0>3", "icmp_echo_ping|0>4", "icmp_echo_ping|0>5", "icmp_echo_ping|0>6","icmp_echo_ping|0>7", "icmp_echo_ping|0>8", "icmp_echo_ping|0>9","icmp_echo_ping|0>10", "icmp_echo_ping|0>11", "icmp_echo_ping|0>12");
+    local attack_rel = string_vec("icmp_echo_ping|0>1", "icmp_echo_ping|0>2", "icmp_echo_ping|0>3", "icmp_echo_ping|0>4", "icmp_echo_ping|0>5", "icmp_echo_ping|0>6","icmp_echo_ping|0>7", "icmp_echo_ping|0>8", "icmp_echo_ping|0>9","icmp_echo_ping|0>10", "icmp_echo_ping|0>11", "icmp_echo_ping|0>12", "icmp_echo_reply|11>0");
     local tmp_n: int = 0;
 
     print attack_rel;

@@ -4,7 +4,7 @@ import os
 import subprocess
 import json
 import requests
-
+import urllib
 # 测试Restful API执行gremlin
 # 垃圾,点和边要单独查?
 # 把ui里脚本的g换成hugegraph.traversal()
@@ -71,6 +71,20 @@ import requests
 # 模式2: "b"对应节点"202.77.162.213"
 # 效果: 得到从b出发的,且距离为1的所有节点对
 
+# g.V().match(
+#     __.as('a').out('icmp_echo_ping').as('b'),
+#     __.as('b').in('rpc_call').as('c')).
+#     where('a', neq('c')).
+#     select('a','c').by('ip')
+# 从某个节点a出发的icmp_echo_ping,到节点b,节点b有来自节点c的rpc_call的入边,where保证a和c
+
+# g.V('1:202.77.162.213').match(
+#     __.as('a').out('icmp_echo_ping').as('b'),
+#     __.as('b').in('icmp_echo_reply').as('c')).
+#     where('a', eq('c')).
+#     select('a','b')
+# 在本场景中也可以用,指定出发点的id,a等于c表示环
+
 # g.V('2:0').bothE().otherV().simplePath().path()
 # g.V('2:0').both().both().cyclicPath().path()
 
@@ -122,10 +136,26 @@ def execute_command(cmd):
     print str1
     return str1
 
+def extract_max_distance(source_node_id):
+    max_distance = 1
+    url = "http://localhost:8080/graphs/hugegraph/traversers/kout"
+    pms = {
+        "source": "\"{source_node_id}\"",
+        "max_depth": max_distance
+    }
+    url_encoded = urllib.urlencode(pms)
+    # cmd = "curl " + url
+    # print cmd
+    print url_encoded
+    r = requests.get(url, params=pms)
+    print r.url
+    print r.status_code
+    return max_distance
+
 if __name__ == '__main__':
     # cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
     # execute_command(cmd)
-    MAX_DISTANCE = 0 # ok
+    MAX_DISTANCE = 1 # ok
     TIME_WINDOW = 0 # 自己设
     KEY_EVENTS = [] # 取和0点相连的attack_event_n的边的event_label属性, ok
     EVENT_CHAIN_PATHS = []
@@ -136,7 +166,9 @@ if __name__ == '__main__':
     # K值(前K个可疑点),ok
     # 最大距离(限制匹配范围),ok
     # 环的处理(模式匹配/连续out匹配),环仍然要化为匹配规则
-
+    source_node_id = "2:0" # 攻击特征图中的攻击节点
+    MAX_DISTANCE = extract_max_distance(source_node_id)
+    print "MAX_DISTANCE = " + str(MAX_DISTANCE)
     # 匹配规则的格式:
     # 可疑点出发,攻击事件链(思路,从攻击模式图中查找所有的事件链组合,重复也没事,链上每一步可能有不止一个事件(兼备,只要模式匹配能达到这个要求就行))
 
