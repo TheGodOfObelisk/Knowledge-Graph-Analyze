@@ -234,6 +234,8 @@ def extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM):
     for item in tmp_dict["rays"]:
         i = 0
         # print item["objects"][2]
+        attack_event_sequence_arr = []
+        attack_event_sequence = ""
         while i + 1 < len(item["objects"]):
             tmp_src = item["objects"][i]
             tmp_dst = item["objects"][i+1]
@@ -241,7 +243,12 @@ def extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM):
             edge_id = "S" + tmp_src + ">" + str(edgelabel_id) + ">>S" + tmp_dst
             print edge_id
             attack_event = extract_attack_event_by_edgeid(edge_id)
+            attack_event_sequence_arr.append(attack_event)
             i += 1
+        for e in attack_event_sequence_arr:
+            attack_event_sequence = attack_event_sequence + e
+        if attack_event_sequence not in tmp_paths:
+            tmp_paths.append(attack_event_sequence)
     return tmp_paths
 
 if __name__ == '__main__':
@@ -274,5 +281,8 @@ if __name__ == '__main__':
     print KEY_EVENTS
     # 提取攻击事件链
     EVENT_CHAIN_PATHS = extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM)
+    print "攻击事件链(无环):"
+    print "EVENT_CHAIN_PATHS = "
+    print EVENT_CHAIN_PATHS
 
 
