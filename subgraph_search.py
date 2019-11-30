@@ -60,7 +60,7 @@ import urllib
 # 攻击模式0下所有的边事件类型
 
 # g.V('1:202.77.162.213').out().out().path()
-# 从点202.77.162.213出发,连续两个出变的路线
+# 从点202.77.162.213出发,连续两个出边的路线
 
 # g.V().and(outE('icmp_echo_ping'), values('ip').is('202.77.162.213')).values('ts')
 # 有icmp_echo_ping类型出边,且ip为202.77.162.213的点的ts值
@@ -100,6 +100,9 @@ import urllib
 # sg = subGraph.traversal()
 # sg.E()
 # 多类型的边,生成的子图.即子图中既包含icmp_echo_ping类型的边,也包含icmp_echo_reply类型的边
+
+# g.V("2:0").repeat(out()).times(2).path()
+# 某点出发,out两次
 
 # 需要的gremline功能
 # 在图sg中,取出其中所有满足某个边属性条件的,边
@@ -194,17 +197,56 @@ def extract_key_events(pattern_num):
             tmp_events.add(item)
     return tmp_events
 
-def extract_event_chain_paths(MAX_DISTANCE):
+def extract_edgelabel_id(PATTERN_NUM):
+    url = "http://localhost:8080/graphs/hugegraph/schema/edgelabels/"
+    edgelabel = "attack_event_" + str(PATTERN_NUM)
+    url = url + edgelabel
+    r = requests.get(url)
+    tmp_dict = json.loads(r.content)
+    return tmp_dict["id"]
+
+def extract_attack_event_by_edgeid(edge_id):
+    url = "http://localhost:8080/graphs/hugegraph/graph/edges/"
+    url = url + edge_id
+    r = requests.get(url)
+    tmp_dict = json.loads(r.content)
+    return tmp_dict["properties"]["event_label"]
+
+def extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM):
     print "提取攻击事件链(无环)..."
     tmp_paths = []
     # 攻击事件链结构
-    # 可以先用Rays方法求出其到边界节点的所有可能路径
+    # 可以先用Rays方法求出其到边界节点的所有可能路径,然后把路径转为事件链.因为是特征子图,计算量不会太大.
     # event(n1),event(n2),...,event(n3)
+    url = "http://localhost:8080/graphs/hugegraph/traversers/rays"
+    pms = {
+        "max_depth": MAX_DISTANCE,
+        "direction": "OUT"
+    }
+    pms["source"] = "\"%s\""%source_node_id
+    url_encoded = urllib.urlencode(pms)
+    r = requests.get(url, params = pms)
+    tmp_dict = json.loads(r.content)
+    print tmp_dict
+    print tmp_dict["rays"]
+    # 根据路径确定边id,边id由两点id以及边标签id决定,所以选查出边标签id,最后拼出边id
+    edgelabel_id = extract_edgelabel_id(PATTERN_NUM)
+    for item in tmp_dict["rays"]:
+        i = 0
+        # print item["objects"][2]
+        while i + 1 < len(item["objects"]):
+            tmp_src = item["objects"][i]
+            tmp_dst = item["objects"][i+1]
+            # tmp_sec, tmp_dst是一小段路径
+            edge_id = "S" + tmp_src + ">" + str(edgelabel_id) + ">>S" + tmp_dst
+            print edge_id
+            attack_event = extract_attack_event_by_edgeid(edge_id)
+            i += 1
     return tmp_paths
 
 if __name__ == '__main__':
-    # cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
-    # execute_command(cmd)
+    # 做的是特征匹配,而不是子图同构匹配,否则漏洞百出
+    # 也可以理解为做的是模糊匹配,而不是精确匹配(不需要)
     PATTERN_NUM = 0
     MAX_DISTANCE = 1 # ok
     TIME_WINDOW = 600 # 自己设
@@ -231,6 +273,6 @@ if __name__ == '__main__':
     KEY_EVENTS = extract_key_events(PATTERN_NUM)
     print KEY_EVENTS
     # 提取攻击事件链
-    EVENT_CHAIN_PATHS = extract_event_chain_paths(MAX_DISTANCE)
+    EVENT_CHAIN_PATHS = extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM)
 
 
