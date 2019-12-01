@@ -246,10 +246,77 @@ def extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM):
             attack_event_sequence_arr.append(attack_event)
             i += 1
         for e in attack_event_sequence_arr:
-            attack_event_sequence = attack_event_sequence + e
+            attack_event_sequence = attack_event_sequence + e + ">"
         if attack_event_sequence not in tmp_paths:
             tmp_paths.append(attack_event_sequence)
     return tmp_paths
+
+def extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM):
+    print "提取攻击事件链(环路)..."
+    # 先确定环路查找的最大深度
+    url = "http://localhost:8080/gremlin"
+    pms = {}
+    tmp_paths = []
+    edgelabel = "attack_event_" + str(PATTERN_NUM)
+    pms["gremlin"] = "hugegraph.traversal().E().hasLabel(\"%s\").count()"%edgelabel
+    url_encoded = urllib.urlencode(pms)
+    r = requests.get(url, params = pms)
+    tmp_dict = json.loads(r.content)
+    depth = tmp_dict["result"]["data"][0] # 保守起见,设为边个数
+    pms.clear()
+    # 使用rings方法查找环路
+    url = "http://localhost:8080/graphs/hugegraph/traversers/rings"
+    pms["source"] = "\"%s\""%source_node_id
+    pms["max_depth"] = depth
+    pms["direction"] = "OUT"
+    url_encoded = urllib.urlencode(pms)
+    r = requests.get(url, params = pms)
+    tmp_dict = json.loads(r.content)
+    edgelabel_id = extract_edgelabel_id(PATTERN_NUM)
+    for item in tmp_dict["rings"]:# 照抄上面的
+        i = 0
+        # print item["objects"][2]
+        attack_event_sequence_arr = []
+        attack_event_sequence = ""
+        while i + 1 < len(item["objects"]):
+            tmp_src = item["objects"][i]
+            tmp_dst = item["objects"][i+1]
+            # tmp_sec, tmp_dst是一小段路径
+            edge_id = "S" + tmp_src + ">" + str(edgelabel_id) + ">>S" + tmp_dst
+            print edge_id
+            attack_event = extract_attack_event_by_edgeid(edge_id)
+            attack_event_sequence_arr.append(attack_event)
+            i += 1
+        for e in attack_event_sequence_arr:
+            attack_event_sequence = attack_event_sequence + e + ">"
+        if attack_event_sequence not in tmp_paths:
+            tmp_paths.append(attack_event_sequence)
+    return tmp_paths
+
+def extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K):
+    print "查找可疑点序列..."
+    with open("gremlin_scripts", "w") as f:
+        textlist = []
+        orSequence = ""
+        for i in KEY_EVENTS:
+            orSequence = orSequence + "__.hasLabel(\"%s\")"%i + ","
+        orSequence = orSequence[:-1] # 去除结尾的逗号
+        print orSequence
+        line = "subGraph = g.E().or(" + orSequence + ").subgraph(\"subGraph\").cap(\"subGraph\").next()\n"
+        textlist.append(line)
+        line = "sg = subGraph.traversal()\n"
+        textlist.append(line)
+        line = "sg.V().group().by(bothE().count())\n"
+        textlist.append(line)
+        f.writelines(textlist)
+        f.flush()
+        f.close()
+    cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
+    result = execute_command(cmd)
+    # print result
+    lines = result.split('\n')
+    print lines
+    return []
 
 if __name__ == '__main__':
     # 做的是特征匹配,而不是子图同构匹配,否则漏洞百出
@@ -260,6 +327,7 @@ if __name__ == '__main__':
     KEY_EVENTS = set() # 取和0点相连的attack_event_n的边的event_label属性, ok
     EVENT_CHAIN_PATHS = []
     EVENT_CHAIN_CYCLICPATHS = []
+    SUSPICIOUS_NODES = []
     K = 1 # 自己设
     # 从特征图中提取以下要素
     # 从可疑节点出发的匹配规则
@@ -284,5 +352,8 @@ if __name__ == '__main__':
     print "攻击事件链(无环):"
     print "EVENT_CHAIN_PATHS = "
     print EVENT_CHAIN_PATHS
-
-
+    EVENT_CHAIN_CYCLICPATHS = extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM)
+    print "攻击事件链(有环):"
+    print "EVENT_CHAIN_CYCLICPATHS = "
+    print EVENT_CHAIN_CYCLICPATHS
+    SUSPICIOUS_NODES = extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K)
