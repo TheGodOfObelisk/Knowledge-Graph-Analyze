@@ -224,7 +224,7 @@ def extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM):
         "direction": "OUT"
     }
     pms["source"] = "\"%s\""%source_node_id
-    url_encoded = urllib.urlencode(pms)
+    # url_encoded = urllib.urlencode(pms)
     r = requests.get(url, params = pms)
     tmp_dict = json.loads(r.content)
     print tmp_dict
@@ -259,7 +259,7 @@ def extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM):
     tmp_paths = []
     edgelabel = "attack_event_" + str(PATTERN_NUM)
     pms["gremlin"] = "hugegraph.traversal().E().hasLabel(\"%s\").count()"%edgelabel
-    url_encoded = urllib.urlencode(pms)
+    # url_encoded = urllib.urlencode(pms)
     r = requests.get(url, params = pms)
     tmp_dict = json.loads(r.content)
     depth = tmp_dict["result"]["data"][0] # 保守起见,设为边个数
@@ -269,7 +269,7 @@ def extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM):
     pms["source"] = "\"%s\""%source_node_id
     pms["max_depth"] = depth
     pms["direction"] = "OUT"
-    url_encoded = urllib.urlencode(pms)
+    # url_encoded = urllib.urlencode(pms)
     r = requests.get(url, params = pms)
     tmp_dict = json.loads(r.content)
     edgelabel_id = extract_edgelabel_id(PATTERN_NUM)
@@ -295,28 +295,128 @@ def extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM):
 
 def extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K):
     print "查找可疑点序列..."
-    with open("gremlin_scripts", "w") as f:
-        textlist = []
-        orSequence = ""
-        for i in KEY_EVENTS:
-            orSequence = orSequence + "__.hasLabel(\"%s\")"%i + ","
-        orSequence = orSequence[:-1] # 去除结尾的逗号
-        print orSequence
-        line = "subGraph = g.E().or(" + orSequence + ").subgraph(\"subGraph\").cap(\"subGraph\").next()\n"
-        textlist.append(line)
-        line = "sg = subGraph.traversal()\n"
-        textlist.append(line)
-        line = "sg.V().group().by(bothE().count())\n"
-        textlist.append(line)
-        f.writelines(textlist)
-        f.flush()
-        f.close()
-    cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
-    result = execute_command(cmd)
-    # print result
-    lines = result.split('\n')
-    print lines
-    return []
+    request_body = {
+        "bindings": {},
+        "language": "gremlin-groovy",
+        "aliases": {}
+    }
+    orSequence = ""
+    for i in KEY_EVENTS:
+        orSequence = orSequence + "__.hasLabel(\"%s\")"%i + ","
+    orSequence = orSequence[:-1] # 去除结尾的逗号
+    # print orSequence
+    line1 = "subGraph = hugegraph.traversal().E().or(" + orSequence + ").subgraph(\"subGraph\").cap(\"subGraph\").next()\n"
+    line2 = "sg = subGraph.traversal()\n"
+    line3 = "sg.V().group().by(bothE().count())\n"
+    request_body["gremlin"] = line1 + line2 + line3
+    # print request_body
+    url = "http://localhost:8080/gremlin"
+    # pms_encoded = urllib.urlencode(request_body)
+    r = requests.post(url, json=request_body)
+    # print r.content
+    tmp_dict = json.loads(r.content)
+    for i in tmp_dict["result"]["data"]:
+        key_list = i.keys()
+        # print key_list
+    degree = []
+    candidates = []
+    for i in key_list:
+        degree.append(int(i))
+    degree.sort(reverse=True)
+    # print degree
+    j = 0
+    # 格式奇怪,要自己解析
+    while j < K:
+        for item in tmp_dict["result"]["data"][0][str(degree[j])]: # 度相同的节点们
+            candidates.append(item["id"])
+        j += 1
+    return candidates
+
+def execute_Gremlin(script):
+    request_body = {
+        "bindings": {},
+        "language": "gremlin-groovy",
+        "aliases": {}
+    }
+    request_body["gremlin"] = script
+    url = "http://localhost:8080/gremlin"
+    r = requests.post(url, json=request_body)
+    tmp_dict = json.loads(r.content)
+    return tmp_dict
+
+def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对某一个点,匹配一个攻击模式
+    print "攻击模式匹配..."
+    search_result = True
+    v = V
+    start_subsentence = "hugegraph.traversal().V('" + v + "').match(\n"
+    match_subsentence = ""
+    end_subsentence = ""
+    where_subsentence = "" #环路匹配需要
+    single_subsentences = []
+    i = 0 # i用于取出符号
+    for item in EVENT_SEQUENCE:
+        if item != "" and i < len(SYMBOL_LIST)-1:
+            if i == len(SYMBOL_LIST)-2 and IsCylic:# 环路匹配的最后一节是in边
+                single_subsentence = "__.as('" + SYMBOL_LIST[i] + "').in('" + item + "').as('" + SYMBOL_LIST[i+1] + "'),"
+            else:
+                single_subsentence = "__.as('" + SYMBOL_LIST[i] + "').out('" + item + "').as('" + SYMBOL_LIST[i+1] + "'),"
+            single_subsentences.append(single_subsentence)
+            i += 1
+        else:
+            break
+    for i in single_subsentences:
+        match_subsentence += i
+    match_subsentence = match_subsentence[:-1]
+    end_subsentence = ").select("
+    for symbol in SYMBOL_LIST:
+        end_subsentence = end_subsentence + "'" + symbol + "',"
+    end_subsentence = end_subsentence[:-1]
+    end_subsentence += ")"
+    if not IsCylic:
+        query_sentence = start_subsentence + match_subsentence + end_subsentence
+    else:
+        where_subsentence = ").where('" + SYMBOL_LIST[0] + "', eq('" + SYMBOL_LIST[len(SYMBOL_LIST)-1] + "')"
+        query_sentence = start_subsentence + match_subsentence + where_subsentence + end_subsentence
+    tmp_dict = execute_Gremlin(query_sentence)
+    if len(tmp_dict["result"]["data"]):
+        print "非空"
+    else:
+        print "空"
+        search_result = False
+    return search_result
+        
+
+def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES):
+    print "开始攻击事件匹配..."
+    print "匹配无环攻击序列..."
+    Malicious_nodes = []
+    for V in SUSPICIOUS_NODES:
+        IsMalicious = True
+        for event in EVENT_CHAIN_PATHS:
+            event_sequence = event.split('>')
+            # event_sequence中实际事件个数为len(event_sequence)-1,去掉最后的空串
+            symbol_list = [] # 符号表中的符号个数应比事件个数多1(点的别名)
+            i = 1
+            while i <= len(event_sequence):
+                symbol_list.append("a" + str((i)))
+                i += 1
+            if False == search_attack_event(symbol_list, event_sequence, V, False):
+                IsMalicious = False
+            print symbol_list
+        print "匹配环路攻击序列..."
+        for event in EVENT_CHAIN_CYCLICPATHS:
+            event_sequence = event.split('>')
+            symbol_list = []
+            i = 1
+            while i <= len(event_sequence):
+                symbol_list.append("a" + str((i)))
+                i += 1
+            if False == search_attack_event(symbol_list, event_sequence, V, True):
+                IsMalicious = False
+            print symbol_list
+        if IsMalicious:
+            Malicious_nodes.append(V)
+    return Malicious_nodes
 
 if __name__ == '__main__':
     # 做的是特征匹配,而不是子图同构匹配,否则漏洞百出
@@ -357,3 +457,11 @@ if __name__ == '__main__':
     print "EVENT_CHAIN_CYCLICPATHS = "
     print EVENT_CHAIN_CYCLICPATHS
     SUSPICIOUS_NODES = extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K)
+    print "可疑节点id:"
+    print "SUSPICIOUS_NODES = "
+    print SUSPICIOUS_NODES
+    MALICIOUS_NODES = extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES)
+    print "恶意节点id:"
+    print "MALICIOUS_NODES = "
+    print MALICIOUS_NODES
+
