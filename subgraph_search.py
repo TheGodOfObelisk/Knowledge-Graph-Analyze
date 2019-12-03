@@ -189,9 +189,9 @@ def extract_key_events(pattern_num):
         f.close()
     cmd = hugegraph_bin_path + "hugegraph " + tool_command + " --file " + project_path + gremline_file_name
     result = execute_command(cmd)
-    print result
+    # print result
     lines = result.split('\n')
-    print lines
+    # print lines
     for item in lines:
         if item != "" and item != "Run gremlin script":# Run gremlin script是hugegraph的输出
             tmp_events.add(item)
@@ -326,6 +326,8 @@ def extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K):
     # print degree
     j = 0
     # 格式奇怪,要自己解析
+    if K > len(tmp_dict["result"]["data"][0]):# K不能过大
+        K = len(tmp_dict["result"]["data"][0])
     while j < K:
         for item in tmp_dict["result"]["data"][0][str(degree[j])]: # 度相同的节点们
             candidates.append(item["id"])
@@ -345,7 +347,8 @@ def execute_Gremlin(script):
     return tmp_dict
 
 def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对某一个点,匹配一个攻击模式
-    print "攻击模式匹配..."
+    print "基于可疑节点进行攻击模式匹配..."
+    print V
     search_result = True
     v = V
     start_subsentence = "hugegraph.traversal().V('" + v + "').match(\n"
@@ -379,9 +382,9 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
         query_sentence = start_subsentence + match_subsentence + where_subsentence + end_subsentence
     tmp_dict = execute_Gremlin(query_sentence)
     if len(tmp_dict["result"]["data"]):
-        print "非空"
+        print "成功!"
     else:
-        print "空"
+        print "失败!"
         search_result = False
     return search_result
         
@@ -428,7 +431,7 @@ if __name__ == '__main__':
     EVENT_CHAIN_PATHS = []
     EVENT_CHAIN_CYCLICPATHS = []
     SUSPICIOUS_NODES = []
-    K = 1 # 自己设
+    K = 2 # 自己设
     # 从特征图中提取以下要素
     # 从可疑节点出发的匹配规则
     # K值(前K个可疑点),ok
