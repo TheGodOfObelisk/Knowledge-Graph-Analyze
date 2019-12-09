@@ -1779,9 +1779,25 @@ function attack_pattern_event_logger(){
     }
 }
 
+function attack_pattern_event_logger1(){
+    # 如果想实现数据独立性,考虑使用输入框架
+    local attack_rel = string_vec("portmap|0>1", "portmap|0>2", "rpc_call|0>1", "rpc_reply|1>0");# protmap|0>1会被覆盖
+    local tmp_n: int = 0;
+
+    print attack_rel;
+    while(tmp_n < |attack_rel|){
+        # print type_name(item);
+        local tmp_tlb: string_vec = split_string(attack_rel[tmp_n], /\|/);
+        local rec: HOST_INFO::pattern_event = [$name="attack_pattern_1", $id=tmp_n, $event_type=tmp_tlb[0], $edge_content=tmp_tlb[1]];
+        Log::write(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, rec);
+        tmp_n += 1;
+    }
+}
+
 function attack_pattern_logger(){
     Log::create_stream(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, [$columns=pattern_event, $path="attack_pattern_event"]);
     attack_pattern_event_logger();
+    attack_pattern_event_logger1();# 暂时这么弄
 }
 
 event zeek_init() &priority=10{

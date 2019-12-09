@@ -381,6 +381,7 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
         where_subsentence = ").where('" + SYMBOL_LIST[0] + "', eq('" + SYMBOL_LIST[len(SYMBOL_LIST)-1] + "')"
         query_sentence = start_subsentence + match_subsentence + where_subsentence + end_subsentence
     tmp_dict = execute_Gremlin(query_sentence)
+    print query_sentence
     if len(tmp_dict["result"]["data"]):
         print "成功!"
     else:
@@ -431,40 +432,45 @@ if __name__ == '__main__':
     EVENT_CHAIN_PATHS = []
     EVENT_CHAIN_CYCLICPATHS = []
     SUSPICIOUS_NODES = []
+    PATTERNS = 2
     K = 2 # 自己设
     # 从特征图中提取以下要素
     # 从可疑节点出发的匹配规则
     # K值(前K个可疑点),ok
     # 最大距离(限制匹配范围),ok
     # 环的处理(模式匹配/连续out匹配),环仍然要化为匹配规则
-    print "开始抽取攻击模式图0的特征信息:"
-    source_node_id = "2:0" # 攻击特征图中的攻击节点
-    MAX_DISTANCE = extract_max_distance(source_node_id)
-    print "MAX_DISTANCE = " + str(MAX_DISTANCE)
-    print "设置时间窗大小..."
-    print "TIME_WINDOW = " + str(TIME_WINDOW)
-    print "设置K值..."
-    print "K = " + str(K)
-    # 匹配规则的格式:
-    # 可疑点出发,攻击事件链(思路,从攻击模式图中查找所有的事件链组合,重复也没事,链上每一步可能有不止一个事件(兼备,只要模式匹配能达到这个要求就行))
-    # 提取关键事件(用于求边生成子图)
-    KEY_EVENTS = extract_key_events(PATTERN_NUM)
-    print KEY_EVENTS
-    # 提取攻击事件链
-    EVENT_CHAIN_PATHS = extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM)
-    print "攻击事件链(无环):"
-    print "EVENT_CHAIN_PATHS = "
-    print EVENT_CHAIN_PATHS
-    EVENT_CHAIN_CYCLICPATHS = extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM)
-    print "攻击事件链(有环):"
-    print "EVENT_CHAIN_CYCLICPATHS = "
-    print EVENT_CHAIN_CYCLICPATHS
-    SUSPICIOUS_NODES = extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K)
-    print "可疑节点id:"
-    print "SUSPICIOUS_NODES = "
-    print SUSPICIOUS_NODES
-    MALICIOUS_NODES = extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES)
-    print "恶意节点id:"
-    print "MALICIOUS_NODES = "
-    print MALICIOUS_NODES
+    while PATTERN_NUM < PATTERNS:
+        KEY_EVENTS.clear() # 集合要清空
+        print "开始抽取攻击模式图0的特征信息:"
+        # source_node_id = "2:0" # 攻击特征图中的攻击节点
+        source_node_id = str(PATTERN_NUM+2) + ":0" # 实际就是相隔2
+        MAX_DISTANCE = extract_max_distance(source_node_id)
+        print "MAX_DISTANCE = " + str(MAX_DISTANCE)
+        print "设置时间窗大小..."
+        print "TIME_WINDOW = " + str(TIME_WINDOW)
+        print "设置K值..."
+        print "K = " + str(K)
+        # 匹配规则的格式:
+        # 可疑点出发,攻击事件链(思路,从攻击模式图中查找所有的事件链组合,重复也没事,链上每一步可能有不止一个事件(兼备,只要模式匹配能达到这个要求就行))
+        # 提取关键事件(用于求边生成子图)
+        KEY_EVENTS = extract_key_events(PATTERN_NUM)
+        print KEY_EVENTS
+        # 提取攻击事件链
+        EVENT_CHAIN_PATHS = extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM)
+        print "攻击事件链(无环):"
+        print "EVENT_CHAIN_PATHS = "
+        print EVENT_CHAIN_PATHS
+        EVENT_CHAIN_CYCLICPATHS = extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM)
+        print "攻击事件链(有环):"
+        print "EVENT_CHAIN_CYCLICPATHS = "
+        print EVENT_CHAIN_CYCLICPATHS
+        SUSPICIOUS_NODES = extract_suspicious_nodes_from_datagraph(KEY_EVENTS, K)
+        print "可疑节点id:"
+        print "SUSPICIOUS_NODES = "
+        print SUSPICIOUS_NODES
+        MALICIOUS_NODES = extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES)
+        print "恶意节点id:"
+        print "MALICIOUS_NODES = "
+        print MALICIOUS_NODES
+        PATTERN_NUM += 1
 
