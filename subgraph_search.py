@@ -432,7 +432,7 @@ if __name__ == '__main__':
     EVENT_CHAIN_PATHS = []
     EVENT_CHAIN_CYCLICPATHS = []
     SUSPICIOUS_NODES = []
-    PATTERNS = 2
+    PATTERNS = 4
     K = 2 # 自己设
     # 从特征图中提取以下要素
     # 从可疑节点出发的匹配规则
