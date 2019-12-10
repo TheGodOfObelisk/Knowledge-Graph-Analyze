@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     # 攻击模式边标签
     # 没办法了,要标明源节点和目的节点的标签,标签的爆炸式增长
-    max_squence = 1
+    max_squence = 3
     i = 0
     while i <= max_squence:
         requestbody = """'{

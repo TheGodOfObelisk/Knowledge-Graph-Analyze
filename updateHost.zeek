@@ -454,7 +454,8 @@ function update_network_event(c: connection, host_description: string, protocol:
                                         $event_type = event_type_para, $src_ip = c$id$orig_h, $src_p = c$id$orig_p, 
                                         $dst_ip = c$id$resp_h, $dst_p = c$id$resp_p, $description = event_description];# 具体进行了哪个进程和端口的转换,从c参数看不出来,需要pm相关的事件提供
     # icmp_echo_reply的地址内容应该和icmp_echo_request的地址内容反过来
-    if(host_description == "icmp_echo_reply"){
+    # rsh_reply也是
+    if(host_description == "icmp_echo_reply" || host_description == "rsh_reply"){
         rec3$src_ip = c$id$resp_h;
         rec3$src_p = c$id$resp_p;
         rec3$dst_ip = c$id$orig_h;
@@ -1610,6 +1611,7 @@ event rsh_reply(c: connection, client_user: string, server_user: string, line: s
     # Generated for client side commands on an RSH connection.
     # See RFC 1258 for more information about the Rlogin/Rsh protocol.
     local des: string = fmt("rsh-connection-client_user:%s,server_user:%s", client_user, server_user);
+    # print c;
     update_network_event(c, "rsh_reply", "rsh", des, RSH_REPLY);
 }
 
@@ -1796,7 +1798,7 @@ function attack_pattern_event_logger1(){
 
 function attack_pattern_event_logger2(){
     # 如果想实现数据独立性,考虑使用输入框架
-    local attack_rel = string_vec("login_output_line|0>1", "login_confused|0>1", "login_success|0>1");# login_success代表root权限被获取,参考CVE-1999-0977
+    local attack_rel = string_vec("login_output_line|0>3", "login_confused|0>2", "login_success|0>1");# login_success代表root权限被获取,参考CVE-1999-0977
     local tmp_n: int = 0;
 
     print attack_rel;
@@ -1809,12 +1811,27 @@ function attack_pattern_event_logger2(){
     }
 }
 
+function attack_pattern_event_logger3(){
+    # 如果想实现数据独立性,考虑使用输入框架
+    local attack_rel = string_vec("rsh_request|0>1", "rsh_reply|1>0");# 
+    local tmp_n: int = 0;
 
+    print attack_rel;
+    while(tmp_n < |attack_rel|){
+        # print type_name(item);
+        local tmp_tlb: string_vec = split_string(attack_rel[tmp_n], /\|/);
+        local rec: HOST_INFO::pattern_event = [$name="attack_pattern_3", $id=tmp_n, $event_type=tmp_tlb[0], $edge_content=tmp_tlb[1]];
+        Log::write(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, rec);
+        tmp_n += 1;
+    }
+}
 
 function attack_pattern_logger(){
     Log::create_stream(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, [$columns=pattern_event, $path="attack_pattern_event"]);
     attack_pattern_event_logger();
     attack_pattern_event_logger1();# 暂时这么弄
+    attack_pattern_event_logger2();
+    attack_pattern_event_logger3();
 }
 
 event zeek_init() &priority=10{
