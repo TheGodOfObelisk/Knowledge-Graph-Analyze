@@ -7,8 +7,8 @@ def extractText(text):
 n = 0
 vertexs = []
 events = []
-propertyKeys_txt = ["ip", "ts", "vertex_type", "edge_type", "time", "ips", "status", "src_ip", "src_p", "dst_ip", "dst_p", "description"]
-propertyKeys_int = ["frequency"]
+propertyKeys_txt = ["ip", "ts", "vertex_type", "edge_type", "time", "ips", "status", "src_ip", "src_p", "dst_ip", "dst_p", "description", "event_label"]
+propertyKeys_int = ["frequency", "pattern_node_id", "pattern_edge_id"]
 vertexTypes = ["entity"]
 edgeTypes = ["icmp_echo_ping", "icmp_echo_reply", "icmp_unreachable", "rpc_reply", "rpc_call", "portmap", 
  "new_connection_contents", "connection_SYN_packet", "tcp_packet", "connection_established",
@@ -83,6 +83,6 @@ if __name__ == '__main__':
 
 
     requestbody = """'{"properties":{"frequency": 2}}'"""
-    cmd="""curl -X PUT -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/graph/edges/"S1:202.77.162.213>1>>S1:172.16.113.95"?action=append -d"""
+    cmd="""curl -X PUT -H "Content-Type:application/json" http://localhost:8080/graphs/hugegraph/graph/edges/"S1:202.77.162.213%3E1%3E%3ES1:172.16.113.95"?action=append -d"""
     cmd = cmd + requestbody
     print cmd

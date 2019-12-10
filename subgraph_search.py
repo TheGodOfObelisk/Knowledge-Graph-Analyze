@@ -359,8 +359,8 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
     i = 0 # i用于取出符号
     for item in EVENT_SEQUENCE:
         if item != "" and i < len(SYMBOL_LIST)-1:
-            if i == len(SYMBOL_LIST)-2 and IsCylic:# 环路匹配的最后一节是in边
-                single_subsentence = "__.as('" + SYMBOL_LIST[i] + "').in('" + item + "').as('" + SYMBOL_LIST[i+1] + "'),"
+            if i == len(SYMBOL_LIST)-2 and IsCylic:# 环路匹配的最后一节是in边   不对,都是out边
+                single_subsentence = "__.as('" + SYMBOL_LIST[i] + "').out('" + item + "').as('" + SYMBOL_LIST[i+1] + "'),"
             else:
                 single_subsentence = "__.as('" + SYMBOL_LIST[i] + "').out('" + item + "').as('" + SYMBOL_LIST[i+1] + "'),"
             single_subsentences.append(single_subsentence)
@@ -442,8 +442,8 @@ if __name__ == '__main__':
     while PATTERN_NUM < PATTERNS:
         KEY_EVENTS.clear() # 集合要清空
         print "开始抽取攻击模式图0的特征信息:"
-        # source_node_id = "2:0" # 攻击特征图中的攻击节点
-        source_node_id = str(PATTERN_NUM+2) + ":0" # 实际就是相隔2
+        # source_node_id = "4:0" # 攻击特征图中的攻击节点 这个id太坑,不可控
+        source_node_id = str(PATTERN_NUM+4) + ":0" # 实际就是相隔2
         MAX_DISTANCE = extract_max_distance(source_node_id)
         print "MAX_DISTANCE = " + str(MAX_DISTANCE)
         print "设置时间窗大小..."
@@ -473,4 +473,6 @@ if __name__ == '__main__':
         print "MALICIOUS_NODES = "
         print MALICIOUS_NODES
         PATTERN_NUM += 1
+        # 阶段2的rpc_call和rpc_reply环匹配有问题,明明有这个环存在,但是匹配不到
+        
 

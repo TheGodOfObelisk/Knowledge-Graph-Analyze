@@ -157,11 +157,11 @@ if __name__ == '__main__':
                 edge_label = "portmap"
             elif item[2] == "HOST_INFO::NEW_CONNECTION_CONTENTS":
                 edge_label = "new_connection_contents"
-            elif item[2] == "HOST_INFO::CONNECTION-SYN-PACKET":
+            elif item[2] == "HOST_INFO::CONNECTION_SYN_PACKET":
                 edge_label = "connection_SYN_packet"
             elif item[2] == "HOST_INFO::TCP_PACKET":
                 edge_label = "tcp_packet"
-            elif item[2] == "HOST_INFO::CONNECTION-ESTABLISHED":
+            elif item[2] == "HOST_INFO::CONNECTION_ESTABLISHED":
                 edge_label = "connection-established"
             elif item[2] == "HOST_INFO::CONNECTION_FIRST_ACK":
                 edge_label = "connection_first_ack"
@@ -188,31 +188,33 @@ if __name__ == '__main__':
             elif item[2] == "HOST_INFO::CONNECTION_ATTEMPT":
                 edge_label = "connection_attempt"
             elif item[2] == "HOST_INFO::LOGIN_TERMINAL":
-                item[2] = "login_terminal"
+                edge_label = "login_terminal"
             elif item[2] == "HOST_INFO::CONNECTION_HALF_FINISHED":
-                item[2] = "connection_half_finished"
+                edge_label = "connection_half_finished"
             elif item[2] == "HOST_INFO::LOGIN_DISPLAY":
-                item[2] = "login_display"
+                edge_label = "login_display"
             elif item[2] == "HOST_INFO::HTTP_EVENT":
-                item[2] = "http_event"
+                edge_label = "http_event"
             elif item[2] == "HOST_INFO::HTTP_STATS":
-                item[2] = "http_stats"
+                edge_label = "http_stats"
             elif item[2] == "HOST_INFO::HTTP_END_ENTITY":
-                item[2] = "http_end_entity"
+                edge_label = "http_end_entity"
             elif item[2] == "HOST_INFO::HTTP_MESSAGE_DONE":
-                item[2] = "http_message_done"
+                edge_label = "http_message_done"
             elif item[2] == "HOST_INFO::HTTP_CONTENT_TYPE":
-                item[2] = "http_content_type"
+                edge_label = "http_content_type"
             elif item[2] == "HOST_INFO::HTTP_ALL_HEADERS":
-                item[2] = "http_all_headers"
+                edge_label = "http_all_headers"
             elif item[2] == "HOST_INFO::HTTP_REPLY":
-                item[2] = "http_reply"
+                edge_label = "http_reply"
             elif item[2] == "HOST_INFO::HTTP_HEADER":
-                item[2] = "http_header"
+                edge_label = "http_header"
             elif item[2] == "HOST_INFO::HTTP_BEGIN_ENTITY":
-                item[2] = "http_begin_entity"
+                edge_label = "http_begin_entity"
             elif item[2] == "HOST_INFO::HTTP_ENTITY_DATA":
-                item[2] = "http_entity_data"
+                edge_label = "http_entity_data"
+            else:
+                print item[2]
             t_src_ip = item[3]
             t_dst_ip = item[5]
             t_ts = item[0]

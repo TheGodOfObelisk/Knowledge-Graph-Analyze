@@ -1794,6 +1794,23 @@ function attack_pattern_event_logger1(){
     }
 }
 
+function attack_pattern_event_logger2(){
+    # 如果想实现数据独立性,考虑使用输入框架
+    local attack_rel = string_vec("login_output_line|0>1", "login_confused|0>1", "login_success|0>1");# login_success代表root权限被获取,参考CVE-1999-0977
+    local tmp_n: int = 0;
+
+    print attack_rel;
+    while(tmp_n < |attack_rel|){
+        # print type_name(item);
+        local tmp_tlb: string_vec = split_string(attack_rel[tmp_n], /\|/);
+        local rec: HOST_INFO::pattern_event = [$name="attack_pattern_2", $id=tmp_n, $event_type=tmp_tlb[0], $edge_content=tmp_tlb[1]];
+        Log::write(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, rec);
+        tmp_n += 1;
+    }
+}
+
+
+
 function attack_pattern_logger(){
     Log::create_stream(HOST_INFO::ATTACK_PATTERN_EVENT_LOG, [$columns=pattern_event, $path="attack_pattern_event"]);
     attack_pattern_event_logger();
