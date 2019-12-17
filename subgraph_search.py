@@ -384,9 +384,6 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
     print query_sentence
     if len(tmp_dict["result"]["data"]):
         print "成功!"
-        # print tmp_dict["result"]["data"]
-        # for i in SYMBOL_LIST:
-        #     print tmp_dict["result"]["data"][0][i] # 涉及的节点...
     else:
         print "失败!"
     return tmp_dict["result"]["data"]
@@ -395,7 +392,7 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
 def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES):
     print "开始攻击事件匹配..."
     Malicious_nodes = []
-    for V in SUSPICIOUS_NODES:
+    for V in SUSPICIOUS_NODES: # 从可疑节点出发,理论上可能会匹配到多个. (一个可疑节点)->(若干个受害节点)
         IsMalicious = True
         print "匹配无环攻击序列..."
         for event in EVENT_CHAIN_PATHS:
@@ -411,6 +408,8 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                 IsMalicious = False
             else:
                 print res
+                for sym in symbol_list:
+                    print res[0][sym] # 涉及的节点
             print symbol_list
         print "匹配环路攻击序列..."
         for event in EVENT_CHAIN_CYCLICPATHS:
@@ -425,6 +424,8 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                 IsMalicious = False
             else:
                 print res
+                for sym in symbol_list:
+                    print res[0][sym] # 涉及的节点
             print symbol_list
         if IsMalicious:
             Malicious_nodes.append(V)
