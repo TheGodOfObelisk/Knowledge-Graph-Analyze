@@ -349,7 +349,7 @@ def execute_Gremlin(script):
 def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对某一个点,匹配一个攻击模式
     print "基于可疑节点进行攻击模式匹配..."
     print V
-    search_result = True
+    # search_result = True
     v = V
     start_subsentence = "hugegraph.traversal().V('" + v + "').match(\n"
     match_subsentence = ""
@@ -384,18 +384,20 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
     print query_sentence
     if len(tmp_dict["result"]["data"]):
         print "成功!"
+        # print tmp_dict["result"]["data"]
+        # for i in SYMBOL_LIST:
+        #     print tmp_dict["result"]["data"][0][i] # 涉及的节点...
     else:
         print "失败!"
-        search_result = False
-    return search_result
+    return tmp_dict["result"]["data"]
         
 
 def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES):
     print "开始攻击事件匹配..."
-    print "匹配无环攻击序列..."
     Malicious_nodes = []
     for V in SUSPICIOUS_NODES:
         IsMalicious = True
+        print "匹配无环攻击序列..."
         for event in EVENT_CHAIN_PATHS:
             event_sequence = event.split('>')
             # event_sequence中实际事件个数为len(event_sequence)-1,去掉最后的空串
@@ -404,8 +406,11 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             while i <= len(event_sequence):
                 symbol_list.append("a" + str((i)))
                 i += 1
-            if False == search_attack_event(symbol_list, event_sequence, V, False):
+            res = search_attack_event(symbol_list, event_sequence, V, False)
+            if not len(res):
                 IsMalicious = False
+            else:
+                print res
             print symbol_list
         print "匹配环路攻击序列..."
         for event in EVENT_CHAIN_CYCLICPATHS:
@@ -415,8 +420,11 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             while i <= len(event_sequence):
                 symbol_list.append("a" + str((i)))
                 i += 1
-            if False == search_attack_event(symbol_list, event_sequence, V, True):
+            res = search_attack_event(symbol_list, event_sequence, V, True)
+            if not len(res):
                 IsMalicious = False
+            else:
+                print res
             print symbol_list
         if IsMalicious:
             Malicious_nodes.append(V)
@@ -472,6 +480,10 @@ if __name__ == '__main__':
         print "恶意节点id:"
         print "MALICIOUS_NODES = "
         print MALICIOUS_NODES
+        # 发现的攻击模式需要保存下来
+        # 为下一步攻击链发现作准备
+        # 匹配成功的结果:单步攻击的表示形式(恶意节点,受影响节点,事件集合,开始时间,结束时间,事件标签)
+        # 事件标签还没有贴上. 可能会用到. 考虑"多因素关联"和"本体推理机"方法
         PATTERN_NUM += 1
         # 阶段2的rpc_call和rpc_reply环匹配有问题,明明有这个环存在,但是匹配不到
         
