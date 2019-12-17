@@ -374,7 +374,7 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
     for symbol in SYMBOL_LIST:
         end_subsentence = end_subsentence + "'" + symbol + "',"
     end_subsentence = end_subsentence[:-1]
-    end_subsentence += ")"
+    end_subsentence += ").by('ip')"
     if not IsCylic:
         query_sentence = start_subsentence + match_subsentence + end_subsentence
     else:
@@ -391,9 +391,11 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
 
 def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES):
     print "开始攻击事件匹配..."
-    Malicious_nodes = []
-    for V in SUSPICIOUS_NODES: # 从可疑节点出发,理论上可能会匹配到多个. (一个可疑节点)->(若干个受害节点)
+    Malicious_nodes = [] # 符合该攻击模式的所有的攻击节点
+    victim_nodes = set()
+    for V in SUSPICIOUS_NODES: # 从可疑节点出发,理论上可能会匹配到多个. (一个可疑节点)->(若干个受害节点),可以写下来,写到文件中去.保存在一个全部变量中也可以
         IsMalicious = True
+        victim_nodes.clear()
         print "匹配无环攻击序列..."
         for event in EVENT_CHAIN_PATHS:
             event_sequence = event.split('>')
@@ -409,7 +411,8 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             else:
                 print res
                 for sym in symbol_list:
-                    print res[0][sym] # 涉及的节点
+                    # print res[0][sym] # 涉及的节点
+                    victim_nodes.add(res[0][sym])
             print symbol_list
         print "匹配环路攻击序列..."
         for event in EVENT_CHAIN_CYCLICPATHS:
@@ -425,10 +428,16 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             else:
                 print res
                 for sym in symbol_list:
-                    print res[0][sym] # 涉及的节点
+                    # print res[0][sym] # 涉及的节点
+                    victim_nodes.add(res[0][sym])
             print symbol_list
         if IsMalicious:
             Malicious_nodes.append(V)
+            # 这种情况下,victim_nodes的内容才有效
+            print "确定恶意节点:"
+            print V
+            print "对应的受害节点:"
+            print victim_nodes
     return Malicious_nodes
 
 if __name__ == '__main__':
@@ -449,7 +458,7 @@ if __name__ == '__main__':
     # 最大距离(限制匹配范围),ok
     # 环的处理(模式匹配/连续out匹配),环仍然要化为匹配规则
     while PATTERN_NUM < PATTERNS:
-        KEY_EVENTS.clear() # 集合要清空
+        KEY_EVENTS.clear() # 集合        # 阶段2的rpc_call和rpc_reply环匹配有问题,明明有这个环存在,但是匹配不到要清空
         print "开始抽取攻击模式图0的特征信息:"
         # source_node_id = "4:0" # 攻击特征图中的攻击节点 这个id太坑,不可控
         source_node_id = str(PATTERN_NUM+4) + ":0" # 实际就是相隔2
@@ -486,6 +495,3 @@ if __name__ == '__main__':
         # 匹配成功的结果:单步攻击的表示形式(恶意节点,受影响节点,事件集合,开始时间,结束时间,事件标签)
         # 事件标签还没有贴上. 可能会用到. 考虑"多因素关联"和"本体推理机"方法
         PATTERN_NUM += 1
-        # 阶段2的rpc_call和rpc_reply环匹配有问题,明明有这个环存在,但是匹配不到
-        
-
