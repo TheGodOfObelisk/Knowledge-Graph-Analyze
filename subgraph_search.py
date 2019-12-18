@@ -143,6 +143,8 @@ project_path = "/home/lw/myKGA/"
 gremline_file_name = "gremlin_scripts"
 tool_command = "gremlin-execute"
 
+nodes_involved = []
+
 def execute_command(cmd):
     sub = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE)
     str1 = sub.stdout.read()
@@ -389,13 +391,13 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
     return tmp_dict["result"]["data"]
         
 
-def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES):
+def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES, PATTERN_NUM):
     print "开始攻击事件匹配..."
     Malicious_nodes = [] # 符合该攻击模式的所有的攻击节点
-    victim_nodes = set()
     for V in SUSPICIOUS_NODES: # 从可疑节点出发,理论上可能会匹配到多个. (一个可疑节点)->(若干个受害节点),可以写下来,写到文件中去.保存在一个全部变量中也可以
+        result_dict = {}
         IsMalicious = True
-        victim_nodes.clear()
+        victim_nodes = set()
         print "匹配无环攻击序列..."
         for event in EVENT_CHAIN_PATHS:
             event_sequence = event.split('>')
@@ -434,10 +436,18 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
         if IsMalicious:
             Malicious_nodes.append(V)
             # 这种情况下,victim_nodes的内容才有效
+            # 攻击模式应当对应一个攻击模式的标签,才合理.仅仅标上序号是不行的.
+            # 可以先按Pattern-序号的形式记录,后面再补上序号和标签的对应关系即可
             print "确定恶意节点:"
             print V
-            print "对应的受害节点:"
+            print "对应的受影响节点:"
             print victim_nodes
+            print "+++++++++++++++++++++++++++++++++++++++++++++++++"
+            result_dict["pattern"] = "attack-pattern-" + str(PATTERN_NUM) # 希望可以处理成label
+            result_dict[V] = victim_nodes
+            nodes_involved.append(result_dict)
+            print nodes_involved
+            print "+++++++++++++++++++++++++++++++++++++++++++++++++"
     return Malicious_nodes
 
 if __name__ == '__main__':
@@ -486,7 +496,7 @@ if __name__ == '__main__':
         print "可疑节点id:"
         print "SUSPICIOUS_NODES = "
         print SUSPICIOUS_NODES
-        MALICIOUS_NODES = extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES)
+        MALICIOUS_NODES = extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPATHS, SUSPICIOUS_NODES, PATTERN_NUM)
         print "恶意节点id:"
         print "MALICIOUS_NODES = "
         print MALICIOUS_NODES
@@ -495,3 +505,4 @@ if __name__ == '__main__':
         # 匹配成功的结果:单步攻击的表示形式(恶意节点,受影响节点,事件集合,开始时间,结束时间,事件标签)
         # 事件标签还没有贴上. 可能会用到. 考虑"多因素关联"和"本体推理机"方法
         PATTERN_NUM += 1
+    print nodes_involved
