@@ -199,13 +199,27 @@ def extract_key_events(pattern_num):
             tmp_events.add(item)
     return tmp_events
 
-def extract_edgelabel_id(PATTERN_NUM):
+def extract_attack_pattern_edgelabel_id(PATTERN_NUM):
     url = "http://localhost:8080/graphs/hugegraph/schema/edgelabels/"
     edgelabel = "attack_event_" + str(PATTERN_NUM)
     url = url + edgelabel
     r = requests.get(url)
     tmp_dict = json.loads(r.content)
     return tmp_dict["id"]
+
+def extract_edgelabelid_by_edgelabel(edgelabel):
+    url = "http://localhost:8080/graphs/hugegraph/schema/edgelabels/"
+    url = url + edgelabel
+    r = requests.get(url)
+    tmp_dict = json.loads(r.content)
+    return tmp_dict["id"]
+
+def extract_edge_by_edgeid(edge_id):
+    url = "http://localhost:8080/graphs/hugegraph/graph/edges/"
+    url = url + edge_id
+    r = requests.get(url)
+    tmp_dict = json.loads(r.content)
+    return tmp_dict
 
 def extract_attack_event_by_edgeid(edge_id):
     url = "http://localhost:8080/graphs/hugegraph/graph/edges/"
@@ -232,7 +246,7 @@ def extract_event_chain_paths(source_node_id, MAX_DISTANCE, PATTERN_NUM):
     print tmp_dict
     print tmp_dict["rays"]
     # 根据路径确定边id,边id由两点id以及边标签id决定,所以选查出边标签id,最后拼出边id
-    edgelabel_id = extract_edgelabel_id(PATTERN_NUM)
+    edgelabel_id = extract_attack_pattern_edgelabel_id(PATTERN_NUM)
     for item in tmp_dict["rays"]:
         i = 0
         # print item["objects"][2]
@@ -274,7 +288,7 @@ def extract_event_chain_cyclicpaths(source_node_id, PATTERN_NUM):
     # url_encoded = urllib.urlencode(pms)
     r = requests.get(url, params = pms)
     tmp_dict = json.loads(r.content)
-    edgelabel_id = extract_edgelabel_id(PATTERN_NUM)
+    edgelabel_id = extract_attack_pattern_edgelabel_id(PATTERN_NUM)
     for item in tmp_dict["rings"]:# 照抄上面的
         i = 0
         # print item["objects"][2]
@@ -415,9 +429,26 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                 IsMalicious = False
             else:
                 print res
-                for sym in symbol_list:
-                    # print res[0][sym] # 涉及的节点
-                    victim_nodes.add(res[0][sym])
+                # 可以按照边id来查,端点的id已知,需要知道边标签的序号,自己拼出边id 使用extract_edgelabelid_by_edgelabel方法
+                index = 1
+                scan_index = 0
+                while scan_index < len(res):
+                    index = 1
+                    while index < len(symbol_list):
+                        print symbol_list[index - 1]
+                        print symbol_list[index]
+                        edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
+                        print edgelabelid
+                        edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
+                        print extract_edge_by_edgeid(edgeid)["properties"]
+                        index += 1
+                    scan_index += 1
+                scan_index = 0
+                while scan_index < len(res):
+                    for sym in symbol_list:# 有问题!第一个ping扫描应该涉及很多节点才对
+                        # print res[0][sym] # 涉及的节点
+                        victim_nodes.add(res[scan_index][sym])
+                    scan_index += 1
             print symbol_list
         print "匹配环路攻击序列..."
         for event in EVENT_CHAIN_CYCLICPATHS:
@@ -432,9 +463,25 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                 IsMalicious = False
             else:
                 print res
-                for sym in symbol_list:
-                    # print res[0][sym] # 涉及的节点
-                    victim_nodes.add(res[0][sym])
+                index = 1
+                scan_index = 0
+                while scan_index < len(res):
+                    index = 1
+                    while index < len(symbol_list):
+                        print symbol_list[index - 1]
+                        print symbol_list[index]
+                        edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
+                        print edgelabelid
+                        edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
+                        print extract_edge_by_edgeid(edgeid)["properties"]
+                        index += 1
+                    scan_index += 1
+                scan_index = 0
+                while scan_index < len(res):
+                    for sym in symbol_list:# 有问题!第一个ping扫描应该涉及很多节点才对
+                        # print res[0][sym] # 涉及的节点
+                        victim_nodes.add(res[scan_index][sym])
+                    scan_index += 1
             print symbol_list
         if IsMalicious:
             Malicious_nodes.append(V)
