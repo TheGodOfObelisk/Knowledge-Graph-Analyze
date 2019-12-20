@@ -450,6 +450,10 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             print "+++++++++++++++++++++++++++++++++++++++++++++++++"
     return Malicious_nodes
 
+# 计算Jaccord集合相似度,p和q是集合类型
+def jaccard(p, q):
+    return float(len(set.intersection(p, q)))/float(len(set.union(p, q)))
+
 if __name__ == '__main__':
     # 做的是特征匹配,而不是子图同构匹配,否则漏洞百出
     # 也可以理解为做的是模糊匹配,而不是精确匹配(不需要)
@@ -514,3 +518,21 @@ if __name__ == '__main__':
     # 4: 从ip,端口,时间,类型等四个角度计算关联度,同时设置关联度阈值
     # 5: 类型需要一个从攻击序号到标签的映射关系
     # 6: 待定,参考论文
+    a = set()
+    b = set()
+    a.add("111")
+    b.add("111")
+    b.add("222")
+    a.add("333")
+    a.add("444")
+    print "测试杰卡徳相似度..."
+    print jaccard(a, b)
+    for e in nodes_involved:
+        print e
+        # 挨个处理
+        for key in e:
+            if key == "pattern":
+                print "convert attack patterns to labels"
+            else:
+                print key
+                print type(e[key])
