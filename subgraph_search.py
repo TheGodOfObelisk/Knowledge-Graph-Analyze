@@ -349,6 +349,8 @@ def execute_Gremlin(script):
     return tmp_dict
 
 def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对某一个点,匹配一个攻击模式
+    # 能不能在这里把边上的时间戳属性也取出来?或者说在得到a1,a2这些之后顺势拿出边上的时间戳
+    # Q: 已经点序列id和边标签,求路径上的边属性?
     print "基于可疑节点进行攻击模式匹配..."
     print V
     # search_result = True
@@ -385,6 +387,7 @@ def search_attack_event(SYMBOL_LIST, EVENT_SEQUENCE, V, IsCylic):# 一次针对�
     tmp_dict = execute_Gremlin(query_sentence)
     print query_sentence
     if len(tmp_dict["result"]["data"]):
+        # 这里应该添加取时间戳的操作,最后把时间戳和tmp_dict["result"]["data"]的内容一并返回,后续的处理稍作修改
         print "成功!"
     else:
         print "失败!"
@@ -535,4 +538,5 @@ if __name__ == '__main__':
                 print "convert attack patterns to labels"
             else:
                 print key
-                print type(e[key])
+                print type(e[key]) # e[key]是受影响节点集合
+                # 再想办法取出时间戳,现在回头取是不是有点难弄?能不能一开始就弄上?
