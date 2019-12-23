@@ -473,7 +473,7 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                         edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
                         print edgelabelid
                         edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
-                        print extract_edge_by_edgeid(edgeid)["properties"]
+                        print double(extract_edge_by_edgeid(edgeid)["properties"]["ts"])
                         index += 1
                     scan_index += 1
                 scan_index = 0
