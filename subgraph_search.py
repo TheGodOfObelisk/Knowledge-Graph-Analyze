@@ -419,6 +419,7 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
         end_time = Decimal()
         IsMalicious = True
         victim_nodes = set()
+        ports_involved = set()
         print "匹配无环攻击序列..."
         for event in EVENT_CHAIN_PATHS:
             event_sequence = event.split('>')
@@ -441,7 +442,9 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                     while index < len(symbol_list):
                         edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
                         edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
-                        tmp_ts = Decimal(extract_edge_by_edgeid(edgeid)["properties"]["ts"])
+                        edge_info = extract_edge_by_edgeid(edgeid)["properties"]
+                        ports_involved.add(edge_info["src_p"])
+                        ports_involved.add(edge_info["dst_p"])
                         if start_time == 0:
                             start_time = tmp_ts
                         if end_time == 0:
@@ -480,7 +483,11 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                     while index < len(symbol_list):
                         edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
                         edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
-                        tmp_ts = Decimal(extract_edge_by_edgeid(edgeid)["properties"]["ts"])
+                        edge_info = extract_edge_by_edgeid(edgeid)["properties"]
+                        ports_involved.add(edge_info["src_p"])
+                        ports_involved.add(edge_info["dst_p"])
+                        tmp_ts = Decimal(edge_info["ts"])
+                        # 初始化时间戳
                         if start_time == 0:
                             start_time = tmp_ts
                         if end_time == 0:
@@ -508,6 +515,8 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             print V
             print "对应的受影响节点:"
             print victim_nodes
+            print "受影响端口:"
+            print ports_involved
             print "开始时间:"
             print start_time
             print "结束时间"
@@ -515,6 +524,7 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             print "+++++++++++++++++++++++++++++++++++++++++++++++++"
             result_dict["pattern"] = "attack-pattern-" + str(PATTERN_NUM) # 希望可以处理成label
             result_dict[V] = victim_nodes
+            result_dict["ports"] = ports_involved
             result_dict["start_time"] = start_time
             result_dict["end_time"] = end_time
             nodes_involved.append(result_dict)
@@ -597,7 +607,7 @@ if __name__ == '__main__':
     b.add("222")
     a.add("333")
     a.add("444")
-    print "测试杰卡徳相似度..."
+    print "测试杰卡徳相似度..." # 应用到ip,端口上
     print jaccard(a, b)
     for e in nodes_involved:
         print e
@@ -608,4 +618,4 @@ if __name__ == '__main__':
             else:
                 print key
                 print type(e[key]) # e[key]是受影响节点集合
-                # 再想办法取出时间戳,现在回头取是不是有点难弄?能不能一开始就弄上?
+                # 再想办法取出时间戳,现在回头取是不是有点难弄?能不能一开始就弄上? 可以
