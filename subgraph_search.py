@@ -5,6 +5,8 @@ import subprocess
 import json
 import requests
 import urllib
+from decimal import Decimal
+from decimal import getcontext
 # 测试Restful API执行gremlin
 # 垃圾,点和边要单独查?
 # 把ui里脚本的g换成hugegraph.traversal()
@@ -413,6 +415,8 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
     Malicious_nodes = [] # 符合该攻击模式的所有的攻击节点
     for V in SUSPICIOUS_NODES: # 从可疑节点出发,理论上可能会匹配到多个. (一个可疑节点)->(若干个受害节点),可以写下来,写到文件中去.保存在一个全部变量中也可以
         result_dict = {}
+        start_time = Decimal()
+        end_time = Decimal()
         IsMalicious = True
         victim_nodes = set()
         print "匹配无环攻击序列..."
@@ -435,12 +439,18 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                 while scan_index < len(res):
                     index = 1
                     while index < len(symbol_list):
-                        print symbol_list[index - 1]
-                        print symbol_list[index]
                         edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
-                        print edgelabelid
                         edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
-                        print extract_edge_by_edgeid(edgeid)["properties"]
+                        tmp_ts = Decimal(extract_edge_by_edgeid(edgeid)["properties"]["ts"])
+                        if start_time == 0:
+                            start_time = tmp_ts
+                        if end_time == 0:
+                            end_time = tmp_ts
+                        # 更新时间戳
+                        if start_time.compare(tmp_ts) > 0:
+                            start_time = tmp_ts
+                        if end_time.compare(tmp_ts) < 0:
+                            end_time = tmp_ts
                         index += 1
                     scan_index += 1
                 scan_index = 0
@@ -468,12 +478,18 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                 while scan_index < len(res):
                     index = 1
                     while index < len(symbol_list):
-                        print symbol_list[index - 1]
-                        print symbol_list[index]
                         edgelabelid = extract_edgelabelid_by_edgelabel(event_sequence[index - 1])
-                        print edgelabelid
                         edgeid = "S1:" + res[scan_index][symbol_list[index - 1]] + ">" + str(edgelabelid) + ">>S1:" + res[scan_index][symbol_list[index]]
-                        print double(extract_edge_by_edgeid(edgeid)["properties"]["ts"])
+                        tmp_ts = Decimal(extract_edge_by_edgeid(edgeid)["properties"]["ts"])
+                        if start_time == 0:
+                            start_time = tmp_ts
+                        if end_time == 0:
+                            end_time = tmp_ts
+                        # 更新时间戳
+                        if start_time.compare(tmp_ts) > 0:
+                            start_time = tmp_ts
+                        if end_time.compare(tmp_ts) < 0:
+                            end_time = tmp_ts
                         index += 1
                     scan_index += 1
                 scan_index = 0
@@ -492,9 +508,15 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             print V
             print "对应的受影响节点:"
             print victim_nodes
+            print "开始时间:"
+            print start_time
+            print "结束时间"
+            print end_time
             print "+++++++++++++++++++++++++++++++++++++++++++++++++"
             result_dict["pattern"] = "attack-pattern-" + str(PATTERN_NUM) # 希望可以处理成label
             result_dict[V] = victim_nodes
+            result_dict["start_time"] = start_time
+            result_dict["end_time"] = end_time
             nodes_involved.append(result_dict)
             print nodes_involved
             print "+++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -564,7 +586,7 @@ if __name__ == '__main__':
     # 分析任务
     # 1: 确定单步攻击的start_time和end_time属性
     # 2: 将攻击模式映射至标签,希望可以做类型关联度分析
-    # 3: 单步攻击表示为(攻击节点,受影响节点,开始时间,结束时间,涉及端口,攻击标签)的六元组
+    # 3: 单步攻击表示为(攻击节点,受影响节点,开始时间,结束时间,涉及端口,攻击标签)的六元组 (1,1,1,1,0,0)
     # 4: 从ip,端口,时间,类型等四个角度计算关联度,同时设置关联度阈值
     # 5: 类型需要一个从攻击序号到标签的映射关系
     # 6: 待定,参考论文
