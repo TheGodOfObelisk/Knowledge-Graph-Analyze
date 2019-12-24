@@ -445,6 +445,7 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
                         edge_info = extract_edge_by_edgeid(edgeid)["properties"]
                         ports_involved.add(edge_info["src_p"])
                         ports_involved.add(edge_info["dst_p"])
+                        tmp_ts = Decimal(edge_info["ts"])
                         if start_time == 0:
                             start_time = tmp_ts
                         if end_time == 0:
@@ -546,7 +547,7 @@ if __name__ == '__main__':
     EVENT_CHAIN_PATHS = []
     EVENT_CHAIN_CYCLICPATHS = []
     SUSPICIOUS_NODES = []
-    PATTERNS = 4
+    PATTERNS = 5
     K = 2 # 自己设
     # 从特征图中提取以下要素
     # 从可疑节点出发的匹配规则
@@ -609,6 +610,7 @@ if __name__ == '__main__':
     a.add("444")
     print "测试杰卡徳相似度..." # 应用到ip,端口上
     print jaccard(a, b)
+    # 要算出任意两个单步之间的关联度,设置一个n*n的关联矩阵
     for e in nodes_involved:
         print e
         # 挨个处理
