@@ -7,6 +7,7 @@ import requests
 import urllib
 from decimal import Decimal
 from decimal import getcontext
+import numpy as np
 # 测试Restful API执行gremlin
 # 垃圾,点和边要单独查?
 # 把ui里脚本的g换成hugegraph.traversal()
@@ -146,6 +147,8 @@ gremline_file_name = "gremlin_scripts"
 tool_command = "gremlin-execute"
 
 nodes_involved = []
+global attack_counter
+
 
 def execute_command(cmd):
     sub = subprocess.Popen(cmd, shell = True, stdout = subprocess.PIPE)
@@ -523,6 +526,9 @@ def extract_attack_event_by_event_chain(EVENT_CHAIN_PATHS, EVENT_CHAIN_CYCLICPAT
             print "结束时间"
             print end_time
             print "+++++++++++++++++++++++++++++++++++++++++++++++++"
+            global attack_counter
+            result_dict["num"] = attack_counter # 用全局变量标个号
+            attack_counter += 1
             result_dict["pattern"] = "attack-pattern-" + str(PATTERN_NUM) # 希望可以处理成label
             result_dict[V] = victim_nodes
             result_dict["ports"] = ports_involved
@@ -540,6 +546,7 @@ def jaccard(p, q):
 if __name__ == '__main__':
     # 做的是特征匹配,而不是子图同构匹配,否则漏洞百出
     # 也可以理解为做的是模糊匹配,而不是精确匹配(不需要)
+    attack_counter = 0
     PATTERN_NUM = 0
     MAX_DISTANCE = 1 # ok
     TIME_WINDOW = 600 # 自己设
@@ -617,7 +624,37 @@ if __name__ == '__main__':
         for key in e:
             if key == "pattern":
                 print "convert attack patterns to labels"
+            elif key == "num": # 是不是按照顺序来的?
+                print e[key]
             else:
                 print key
                 print type(e[key]) # e[key]是受影响节点集合
                 # 再想办法取出时间戳,现在回头取是不是有点难弄?能不能一开始就弄上? 可以
+    print len(nodes_involved)
+    # 先按时间顺序罗列一下?
+    incidence_matrix = np.zeros((len(nodes_involved), len(nodes_involved)))
+    print "初始化关联性度量矩阵..."
+    print incidence_matrix
+    # Corr( Ha, Hb) = ∑ w i × C i
+    # C1: IP的集合相似度(受影响节点) 是否需要对子集之类的情况作一些修正?
+    # C2: Port的集合相似度(参与通信的端口)
+    # C3: 类型 APT的杀伤链模型
+    for a in nodes_involved:
+        for b in nodes_involved:
+            if a["num"] == b["num"]:
+                continue
+            key1 = ""
+            key2 = ""
+            for key in a: # 恶意节点ip不太确定
+                if key != "pattern" and key != "start_time" and key != "num" and key != "end_time" and key != "ports":
+                    key1 = key
+            for key in b:
+                if key != "pattern" and key != "start_time" and key != "num" and key != "end_time" and key != "ports":
+                    key2 = key
+            c1 = jaccard(a[key1], b[key2])
+            c2 = jaccard(a["ports"], b["ports"])
+            getcontext().prec = 4
+            c = Decimal(0.5 * c1 + 0.5 * c2) # 暂时这么写
+            incidence_matrix[a["num"], b["num"]] = incidence_matrix[b["num"], a["num"]] = c # 关联矩阵应该是个对称矩阵
+    print "计算过后的关联性度量矩阵..."
+    print incidence_matrix
