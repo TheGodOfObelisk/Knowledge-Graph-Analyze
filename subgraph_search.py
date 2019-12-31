@@ -544,6 +544,13 @@ def jaccard(p, q):
     return float(len(set.intersection(p, q)))/float(len(set.union(p, q)))
 
 if __name__ == '__main__':
+    # 工作分四部分:
+    # 第一部分,图谱构建(基本完成,不在此文档中)
+    # 第二部分,属性图挖掘进行攻击发现(基本完成)
+    # 第三部分,属性图相似度计算进行攻击关联(有思路可以参考,吴东的超级告警方法,但也有不同的地方)
+    # 第四部分,基于恶意节点影响度进行态势理解(考虑pagerank算法结合场景,考虑两个因素,第一,单步攻击的影响关系,第二,涉及攻击链的影响关系,
+    # 还没做,但这个应该不太难,此算法有现成代码,最后只是给出态势值,说服力可能不够)
+    # 思路先理清,文章不能着急写
     # 做的是特征匹配,而不是子图同构匹配,否则漏洞百出
     # 也可以理解为做的是模糊匹配,而不是精确匹配(不需要)
     attack_counter = 0
@@ -608,6 +615,8 @@ if __name__ == '__main__':
     # 4: 从ip,端口,时间,类型等四个角度计算关联度,同时设置关联度阈值
     # 5: 类型需要一个从攻击序号到标签的映射关系
     # 6: 待定,参考论文
+    # 关于攻击标签的考虑,这是一种比较明显的专家知识.最多作辅助使用,比如属于杀伤链的某个大阶段.
+    # 弱化攻击标签的影响,好让我的"发现新攻击序列"的说法站得住脚
     a = set()
     b = set()
     a.add("111")
@@ -645,16 +654,23 @@ if __name__ == '__main__':
                 continue
             key1 = ""
             key2 = ""
-            for key in a: # 恶意节点ip不太确定
+            for key in a: # 恶意节点ip不太确定, key1和key2都代表恶意节点ip
                 if key != "pattern" and key != "start_time" and key != "num" and key != "end_time" and key != "ports":
                     key1 = key
             for key in b:
                 if key != "pattern" and key != "start_time" and key != "num" and key != "end_time" and key != "ports":
                     key2 = key
-            c1 = jaccard(a[key1], b[key2])
+            c1 = jaccard(a[key1], b[key2]) # a[key1]和b[key2]分别代表受影响节点
+            # 可以分情况考虑,如果key1和key2相同,说明这两个攻击关联性强(为同一个恶意节点发动的攻击)
+            # 反之,如果key1和key2不同,那么就从受影响节点的集合来考虑. Jaccard常数为0,完全无关,非0,有关.
+            # 还可以考虑一些其他的情况,比如key1或者key2在对方的受影响节点中,key2在key1的受影响节点中
+            # 说明,key2可能是被key1入侵了,成为了新的肉机(当然,还需要时间上满足先后关系).这种情况,可以增加关联性值.
             c2 = jaccard(a["ports"], b["ports"])
             getcontext().prec = 4
             c = Decimal(0.5 * c1 + 0.5 * c2) # 暂时这么写
             incidence_matrix[a["num"], b["num"]] = incidence_matrix[b["num"], a["num"]] = c # 关联矩阵应该是个对称矩阵
     print "计算过后的关联性度量矩阵..."
     print incidence_matrix
+    # 计算结束之后,需要设置规定"两者之间是否有相关关系"的阈值
+    # 此后可以仿照吴东的方法,构建单步攻击时间关系图并从中挖掘攻击链
+    # ...
