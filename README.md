@@ -59,7 +59,7 @@ In the case of this scenario, however, it should be noted that the DDoS does not
 ## 各个文件的功能
 addEdge.py: 好像没用，当时是用来测试“添加边”的功能的。  
 attack_pattern.py：把自定义的攻击特征（在attack_pattern_event.log中）导入“特征图谱”。  
-generate_graph.py：生成网路事件图。  
+generate_graph.py：生成网络事件图。  
 initial_properties.py：定义图谱中需要的点、边属性，还有标签。  
 initial.groovy：没用。  
 put_method.py：没用。  
