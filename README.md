@@ -56,3 +56,14 @@ In the case of this scenario, however, it should be noted that the DDoS does not
  1. 图谱构建工作,首先,网络安全知识部分转移过来(从原先的mysql数据库,需重新考虑点属性和关系)；其次,关注bro脚本和自带日志,完善动态图；最后构建特征事件图(要结合后面的图分析算法考虑).  
  2. 图分析算法,在动态图中发现攻击事件(匹配攻击事件),这是第一个难点.考虑这几点,第一,实际场景中,分析对象是动态变化的,动态图匹配算法复杂度高；第二,这里的图匹配不是严格的匹配,而是模式匹配,另外,不仅仅要考虑拓扑,还要考虑点/边的属性(图的内容).这一步完成,即完成任务:基于行为发现攻击事件(尚未将攻击事件串起来).  
  3. 攻击事件关联分析方法,仅发现攻击事件是不够的,需要找到这些攻击事件之间的关联,以进一步发现多步攻击.这里考虑HMM方法,还需要更多工作.可预见的难点,如何将HMM方法与KG扯上关系,这一点很重要.    
+## 各个文件的功能
+addEdge.py: 好像没用，当时是用来测试“添加边”的功能的。  
+attack_pattern.py：把自定义的攻击特征（在attack_pattern_event.log中）导入“特征图谱”。  
+generate_graph.py：生成网路事件图。  
+initial_properties.py：定义图谱中需要的点、边属性，还有标签。  
+initial.groovy：没用。  
+put_method.py：没用。  
+signature_test.bro：没用。  
+subgraph_search.py：完成攻击事件查找，尚没有弄关联（设置的攻击事件太少了！）。  
+updateHost.bro：bro旧版本，没用。  
+updateHost.zeek：生成产生图谱所需的日志文件。  
